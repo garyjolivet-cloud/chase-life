@@ -12,10 +12,10 @@
 // KH bounding box (lat min/max, lon min/max).
 // Matches SPEC v0.7 §3.5 validation rules.
 const KH_BBOX = {
-  latMin: 50.84,
-  latMax: 50.92,
-  lonMin: -116.94,
-  lonMax: -116.85,
+  latMin: 51.26,
+  latMax: 51.31,
+  lonMin: -117.10,
+  lonMax: -117.03,
 };
 
 // 16-point compass labels for stormDirPreference (SPEC §3.5).
