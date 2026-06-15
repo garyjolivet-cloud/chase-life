@@ -1,184 +1,141 @@
-// POIValidator.js — type-aware POI schema validation
-// ─────────────────────────────────────────────────────────────
-// Validates POI records before they are written to KV.
-// Returns { valid: boolean, errors: string[] }
-//
-// Per SPEC v0.7 §3.5 and §4.4.
-//
-// Pure JavaScript. No DOM, no network, no Cloudflare APIs.
+// POIValidator.test.js
+// Tests V1–V8 for validatePOI() — SPEC v0.7 §3.5 / §4.4.
+// Reconstructed from src/POIValidator.js behavior (originals were never committed).
 
-// ─── Constants ──────────────────────────────────────────────
+import { validatePOI } from '../src/POIValidator.js';
 
-// KH bounding box (lat min/max, lon min/max).
-// Matches SPEC v0.7 §3.5 validation rules.
-const KH_BBOX = {
-  latMin: 50.84,
-  latMax: 50.92,
-  lonMin: -116.94,
-  lonMax: -116.85,
-};
+// ─── Fixtures ───────────────────────────────────────────────────────────
+// A fully valid record of each type. Tests clone + mutate these.
 
-// 16-point compass labels for stormDirPreference (SPEC §3.5).
-const COMPASS_16 = [
-  'N',  'NNE', 'NE', 'ENE',
-  'E',  'ESE', 'SE', 'SSE',
-  'S',  'SSW', 'SW', 'WSW',
-  'W',  'WNW', 'NW', 'NNW',
-];
-
-const VALID_TYPES = ['winter-chute', 'narrative-poi', 'general'];
-const VALID_SEASONS = ['summer', 'winter', 'any'];
-
-const RADIUS_MIN = 5;
-const RADIUS_MAX = 100;
-
-// ─── ID format check ────────────────────────────────────────
-// Lowercase letters, digits, hyphens only. Must not start/end with hyphen.
-const ID_REGEX = /^[a-z0-9]+(-[a-z0-9]+)*$/;
-
-// ─── Helpers ────────────────────────────────────────────────
-
-function isInsideKHBbox(latLon) {
-  if (!Array.isArray(latLon) || latLon.length !== 2) return false;
-  const [lat, lon] = latLon;
-  if (typeof lat !== 'number' || typeof lon !== 'number') return false;
-  return (
-    lat >= KH_BBOX.latMin && lat <= KH_BBOX.latMax &&
-    lon >= KH_BBOX.lonMin && lon <= KH_BBOX.lonMax
-  );
-}
-
-function isNonEmptyString(v) {
-  return typeof v === 'string' && v.trim().length > 0;
-}
-
-function isNumber(v) {
-  return typeof v === 'number' && !isNaN(v) && isFinite(v);
-}
-
-// ─── Per-type validators ────────────────────────────────────
-
-function validateCommonFields(poi, errors) {
-  // id
-  if (!isNonEmptyString(poi.id)) {
-    errors.push('id is required and must be a non-empty string');
-  } else if (!ID_REGEX.test(poi.id)) {
-    errors.push(`id "${poi.id}" must be lowercase letters/digits/hyphens only (no spaces or special chars)`);
-  }
-
-  // name
-  if (!isNonEmptyString(poi.name)) {
-    errors.push('name is required and must be a non-empty string');
-  }
-
-  // type
-  if (!VALID_TYPES.includes(poi.type)) {
-    errors.push(`type must be one of: ${VALID_TYPES.join(', ')} (got "${poi.type}")`);
-  }
-
-  // topLatLon
-  if (!Array.isArray(poi.topLatLon) || poi.topLatLon.length !== 2) {
-    errors.push('topLatLon is required and must be [lat, lon]');
-  } else if (!isInsideKHBbox(poi.topLatLon)) {
-    errors.push(`topLatLon ${JSON.stringify(poi.topLatLon)} is outside the KH bounding box`);
-  }
-
-  // radiusMeters
-  if (!isNumber(poi.radiusMeters)) {
-    errors.push('radiusMeters is required and must be a number');
-  } else if (poi.radiusMeters < RADIUS_MIN || poi.radiusMeters > RADIUS_MAX) {
-    errors.push(`radiusMeters must be between ${RADIUS_MIN} and ${RADIUS_MAX} (got ${poi.radiusMeters})`);
-  }
-}
-
-function validateWinterChuteFields(poi, errors) {
-  // stormDirPreference
-  if (!COMPASS_16.includes(poi.stormDirPreference)) {
-    errors.push(`stormDirPreference must be one of the 16 compass labels (got "${poi.stormDirPreference}")`);
-  }
-
-  // bottomLatLon
-  if (!Array.isArray(poi.bottomLatLon) || poi.bottomLatLon.length !== 2) {
-    errors.push('bottomLatLon is required for winter-chute and must be [lat, lon]');
-  } else if (!isInsideKHBbox(poi.bottomLatLon)) {
-    errors.push(`bottomLatLon ${JSON.stringify(poi.bottomLatLon)} is outside the KH bounding box`);
-  }
-
-  // slope range
-  if (!isNumber(poi.slopeMin_deg) || !isNumber(poi.slopeMax_deg)) {
-    errors.push('slopeMin_deg and slopeMax_deg are required and must be numbers');
-  } else if (poi.slopeMin_deg > poi.slopeMax_deg) {
-    errors.push(`slopeMin_deg (${poi.slopeMin_deg}) must be <= slopeMax_deg (${poi.slopeMax_deg})`);
-  }
-
-  // width range
-  if (!isNumber(poi.widthMin_m) || !isNumber(poi.widthMax_m)) {
-    errors.push('widthMin_m and widthMax_m are required and must be numbers');
-  } else if (poi.widthMin_m > poi.widthMax_m) {
-    errors.push(`widthMin_m (${poi.widthMin_m}) must be <= widthMax_m (${poi.widthMax_m})`);
-  }
-
-  // elevation range
-  if (!isNumber(poi.topElev_m) || !isNumber(poi.bottomElev_m)) {
-    errors.push('topElev_m and bottomElev_m are required and must be numbers');
-  } else if (poi.topElev_m < poi.bottomElev_m) {
-    errors.push(`topElev_m (${poi.topElev_m}) must be >= bottomElev_m (${poi.bottomElev_m})`);
-  }
-}
-
-function validateNarrativePoiFields(poi, errors) {
-  // audioUrl required (v1 is audio-first per SPEC v0.7)
-  if (!isNonEmptyString(poi.audioUrl)) {
-    errors.push('audioUrl is required for narrative-poi (v1 is audio-first)');
-  }
-
-  // season
-  if (!VALID_SEASONS.includes(poi.season)) {
-    errors.push(`season must be one of: ${VALID_SEASONS.join(', ')} (got "${poi.season}")`);
-  }
-}
-
-// ─── Public API ─────────────────────────────────────────────
-
-/**
- * Validate a POI record against the v0.7 schema.
- * @param {object} poi - POI record to validate
- * @returns {{valid: boolean, errors: string[]}}
- */
-export function validatePOI(poi) {
-  const errors = [];
-
-  if (poi === null || typeof poi !== 'object') {
-    return { valid: false, errors: ['poi must be an object'] };
-  }
-
-  // Common fields first (always validated)
-  validateCommonFields(poi, errors);
-
-  // Type-specific fields (only if type is one we recognize)
-  if (poi.type === 'winter-chute') {
-    validateWinterChuteFields(poi, errors);
-  } else if (poi.type === 'narrative-poi') {
-    validateNarrativePoiFields(poi, errors);
-  } else if (poi.type === 'general') {
-    // No additional validation; common fields are enough
-  }
-  // If type is invalid, validateCommonFields already added that error;
-  // we skip type-specific validation to avoid noise.
-
+function validWinterChute() {
   return {
-    valid: errors.length === 0,
-    errors,
+    id: 'tunnel-vision',
+    name: 'Tunnel Vision',
+    type: 'winter-chute',
+    topLatLon: [50.88, -116.9],
+    radiusMeters: 25,
+    stormDirPreference: 'SSW',
+    bottomLatLon: [50.875, -116.91],
+    slopeMin_deg: 38,
+    slopeMax_deg: 45,
+    widthMin_m: 3,
+    widthMax_m: 8,
+    topElev_m: 2380,
+    bottomElev_m: 2120,
   };
 }
 
-// Export the constants too, in case tests or callers want to reference them
-export const VALIDATOR_CONSTANTS = {
-  KH_BBOX,
-  COMPASS_16,
-  VALID_TYPES,
-  VALID_SEASONS,
-  RADIUS_MIN,
-  RADIUS_MAX,
-  ID_REGEX,
-};
+function validNarrativePoi() {
+  return {
+    id: 'whispering-pines',
+    name: 'Whispering Pines',
+    type: 'narrative-poi',
+    topLatLon: [50.88, -116.9],
+    radiusMeters: 30,
+    audioUrl: 'https://example.com/audio.mp3',
+    season: 'winter',
+  };
+}
+
+function validGeneral() {
+  return {
+    id: 'base-lodge',
+    name: 'Base Lodge',
+    type: 'general',
+    topLatLon: [50.85, -116.93],
+    radiusMeters: 50,
+  };
+}
+
+// helper: does any error string match a pattern?
+function hasError(result, re) {
+  return result.errors.some(e => re.test(e));
+}
+
+// ─── V1: valid winter-chute passes ──────────────────────────────────────
+test('V1 — validatePOI: a complete winter-chute is valid', () => {
+  const result = validatePOI(validWinterChute());
+  assertEq(result.valid, true, 'expected valid winter-chute');
+  assertEq(result.errors.length, 0, 'expected no errors');
+});
+
+// ─── V2: valid narrative-poi passes ─────────────────────────────────────
+test('V2 — validatePOI: a complete narrative-poi is valid', () => {
+  const result = validatePOI(validNarrativePoi());
+  assertEq(result.valid, true, 'expected valid narrative-poi');
+  assertEq(result.errors.length, 0, 'expected no errors');
+});
+
+// ─── V3: valid general passes ───────────────────────────────────────────
+test('V3 — validatePOI: a complete general POI is valid', () => {
+  const result = validatePOI(validGeneral());
+  assertEq(result.valid, true, 'expected valid general POI');
+  assertEq(result.errors.length, 0, 'expected no errors');
+});
+
+// ─── V4: bad id and missing name rejected ───────────────────────────────
+test('V4 — validatePOI: bad id and missing name are rejected', () => {
+  const poi = validGeneral();
+  poi.id = 'Bad ID!';   // uppercase + space + special char
+  poi.name = '   ';     // blank after trim
+  const result = validatePOI(poi);
+  assertEq(result.valid, false, 'expected invalid');
+  assert(hasError(result, /id/i), 'expected an id error');
+  assert(hasError(result, /name/i), 'expected a name error');
+});
+
+// ─── V5: topLatLon outside KH bounding box rejected ─────────────────────
+test('V5 — validatePOI: topLatLon outside KH bbox is rejected', () => {
+  const poi = validGeneral();
+  poi.topLatLon = [49.0, -123.0]; // Vancouver-ish, well outside KH
+  const result = validatePOI(poi);
+  assertEq(result.valid, false, 'expected invalid');
+  assert(hasError(result, /bounding box/i), 'expected a bbox error');
+});
+
+// ─── V6: radiusMeters out of range rejected ─────────────────────────────
+test('V6 — validatePOI: radiusMeters must be within 5–100', () => {
+  const tooSmall = validGeneral();
+  tooSmall.radiusMeters = 2;
+  assertEq(validatePOI(tooSmall).valid, false, 'radius 2 should be invalid');
+
+  const tooBig = validGeneral();
+  tooBig.radiusMeters = 250;
+  const big = validatePOI(tooBig);
+  assertEq(big.valid, false, 'radius 250 should be invalid');
+  assert(hasError(big, /radiusMeters/), 'expected a radiusMeters error');
+});
+
+// ─── V7: winter-chute reversed ranges rejected ──────────────────────────
+test('V7 — validatePOI: winter-chute reversed slope/width/elevation rejected', () => {
+  const poi = validWinterChute();
+  poi.slopeMin_deg = 50; poi.slopeMax_deg = 40;   // min > max
+  poi.widthMin_m = 9;    poi.widthMax_m = 4;       // min > max
+  poi.topElev_m = 2000;  poi.bottomElev_m = 2400;  // top below bottom
+  const result = validatePOI(poi);
+  assertEq(result.valid, false, 'expected invalid');
+  assert(hasError(result, /slopeMin_deg/), 'expected slope range error');
+  assert(hasError(result, /widthMin_m/),   'expected width range error');
+  assert(hasError(result, /topElev_m/),    'expected elevation range error');
+});
+
+// ─── V8: type-specific requirements + guards ────────────────────────────
+test('V8 — validatePOI: missing audioUrl, bad type, and non-object rejected', () => {
+  // narrative-poi missing audioUrl + invalid season
+  const narr = validNarrativePoi();
+  delete narr.audioUrl;
+  narr.season = 'autumn';
+  const nr = validatePOI(narr);
+  assertEq(nr.valid, false, 'narrative without audioUrl should be invalid');
+  assert(hasError(nr, /audioUrl/), 'expected audioUrl error');
+  assert(hasError(nr, /season/),   'expected season error');
+
+  // invalid type
+  const bad = validGeneral();
+  bad.type = 'banana';
+  assertEq(validatePOI(bad).valid, false, 'unknown type should be invalid');
+
+  // non-object guard
+  assertEq(validatePOI(null).valid, false, 'null should be invalid');
+  assertEq(validatePOI(42).valid, false, 'number should be invalid');
+});
