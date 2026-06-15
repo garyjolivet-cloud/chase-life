@@ -1014,13 +1014,13 @@ input, textarea, select { font-family: inherit; }
         <div class="field-row">
           <div class="field">
             <label for="f-topLat">Top latitude <span class="req">*</span></label>
-            <input type="number" id="f-topLat" step="0.0001" placeholder="50.8800">
-            <div class="hint" id="hint-topLat">KH range: 50.84 – 50.92</div>
+            <input type="number" id="f-topLat" step="0.0001" placeholder="51.2750">
+            <div class="hint" id="hint-topLat">KH range: 51.26 – 51.31</div>
           </div>
           <div class="field">
             <label for="f-topLon">Top longitude <span class="req">*</span></label>
-            <input type="number" id="f-topLon" step="0.0001" placeholder="-116.9100">
-            <div class="hint" id="hint-topLon">KH range: -116.94 – -116.85</div>
+            <input type="number" id="f-topLon" step="0.0001" placeholder="-117.0794">
+            <div class="hint" id="hint-topLon">KH range: -117.10 – -117.03</div>
           </div>
         </div>
         <div class="field">
@@ -1036,12 +1036,12 @@ input, textarea, select { font-family: inherit; }
         <div class="field-row">
           <div class="field">
             <label for="f-bottomLat">Bottom latitude <span class="req">*</span></label>
-            <input type="number" id="f-bottomLat" step="0.0001" placeholder="50.8750">
+            <input type="number" id="f-bottomLat" step="0.0001" placeholder="51.2761">
             <div class="hint">Used to compute the chute's axis bearing.</div>
           </div>
           <div class="field">
             <label for="f-bottomLon">Bottom longitude <span class="req">*</span></label>
-            <input type="number" id="f-bottomLon" step="0.0001" placeholder="-116.9100">
+            <input type="number" id="f-bottomLon" step="0.0001" placeholder="-117.0802">
             <div class="hint" id="hint-bearing">&nbsp;</div>
           </div>
         </div>
@@ -1198,7 +1198,7 @@ const TYPE_LABELS = {
 };
 
 // Mirror server-side validator (POIValidator.js)
-const KH_BBOX = { latMin: 50.84, latMax: 50.92, lonMin: -116.94, lonMax: -116.85 };
+const KH_BBOX = { latMin: 51.26, latMax: 51.31, lonMin: -117.10, lonMax: -117.03 };
 const COMPASS_16 = ['N','NNE','NE','ENE','E','ESE','SE','SSE','S','SSW','SW','WSW','W','WNW','NW','NNW'];
 const VALID_TYPES = ['winter-chute','narrative-poi','general'];
 const VALID_SEASONS = ['summer','winter','any'];
