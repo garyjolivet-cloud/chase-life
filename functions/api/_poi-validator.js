@@ -7,10 +7,10 @@
 // and the source matches, then update SPEC §3.5 if rules changed.
 
 const KH_BBOX = {
-  latMin: 50.84,
-  latMax: 50.92,
-  lonMin: -116.94,
-  lonMax: -116.85,
+  latMin: 51.26,
+  latMax: 51.31,
+  lonMin: -117.10,
+  lonMax: -117.03,
 };
 
 const COMPASS_16 = [
