@@ -5,6 +5,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>Chase Life · Back Office</title>
 <link href="https://fonts.googleapis.com/css2?family=Black+Han+Sans&family=Barlow+Condensed:wght@300;400;600;700;900&family=Barlow:wght@300;400;600&display=swap" rel="stylesheet">
+<link href="https://unpkg.com/maplibre-gl@4/dist/maplibre-gl.css" rel="stylesheet">
 <style>
 :root {
   --ink:     #0a0e14;
@@ -800,6 +801,29 @@ input, textarea, select { font-family: inherit; }
   .field-row { grid-template-columns: 1fr; }
   .compass-picker { grid-template-columns: repeat(4, 1fr); }
 }
+/* ── Map view (Step 13) ── */
+.map-wrap { position: relative; height: calc(100vh - 230px); min-height: 420px; border: 1px solid var(--rim); border-radius: 12px; overflow: hidden; }
+#map { position: absolute; inset: 0; background: var(--card); }
+.map-basemap-toggle { display: inline-flex; border: 1px solid var(--rim); border-radius: 8px; overflow: hidden; }
+.map-basemap-toggle button { background: var(--card); color: var(--text); border: none; border-right: 1px solid var(--rim); padding: 8px 12px; font: inherit; font-size: 0.85rem; cursor: pointer; }
+.map-basemap-toggle button:last-child { border-right: none; }
+.map-basemap-toggle button.active { background: var(--coral); color: #1a0e06; font-weight: 700; }
+.map-pin { width: 15px; height: 15px; border-radius: 50% 50% 50% 0; transform: rotate(-45deg); border: 2px solid var(--ink); box-shadow: 0 1px 5px rgba(0,0,0,.6); cursor: pointer; }
+.map-pin:hover { filter: brightness(1.15); }
+.map-panel { position: absolute; top: 12px; right: 12px; width: 280px; max-width: calc(100% - 24px); background: rgba(17,24,32,0.97); border: 1px solid var(--rim-hi); border-radius: 12px; padding: 14px; box-shadow: 0 8px 30px rgba(0,0,0,.5); transform: translateX(calc(100% + 24px)); transition: transform .25s ease; z-index: 5; }
+.map-panel.open { transform: translateX(0); }
+.map-panel-head { display: flex; align-items: center; justify-content: space-between; margin-bottom: 8px; gap: 10px; }
+.map-panel-title { font-family: 'Black Han Sans', sans-serif; font-size: 1.05rem; color: var(--snow); }
+.map-panel-close { background: none; border: none; color: var(--muted); font-size: 1.5rem; line-height: 1; cursor: pointer; padding: 0 4px; }
+.map-panel-close:hover { color: var(--text); }
+.mp-row { display: flex; justify-content: space-between; gap: 10px; padding: 5px 0; border-bottom: 1px solid var(--rim); font-size: 0.85rem; }
+.mp-k { color: var(--muted); text-transform: uppercase; font-size: 0.7rem; letter-spacing: .04em; }
+.mp-v { color: var(--text); text-align: right; font-variant-numeric: tabular-nums; }
+.map-panel .btn { width: 100%; margin-top: 12px; }
+.map-legend { position: absolute; bottom: 12px; left: 12px; display: flex; gap: 12px; background: rgba(17,24,32,0.9); border: 1px solid var(--rim); border-radius: 8px; padding: 6px 10px; font-size: 0.74rem; color: var(--text); z-index: 4; }
+.map-legend span { display: inline-flex; align-items: center; gap: 5px; }
+.map-legend i { width: 10px; height: 10px; border-radius: 50%; display: inline-block; }
+.maplibregl-ctrl-attrib, .maplibregl-popup { font-size: 0.68rem; }
 </style>
 </head>
 <body>
@@ -883,6 +907,7 @@ input, textarea, select { font-family: inherit; }
   <nav class="tabs">
     <button class="tab" data-tab="dashboard">Dashboard</button>
     <button class="tab" data-tab="pois">POIs</button>
+    <button class="tab" data-tab="map">Map</button>
   </nav>
 
   <div class="main">
@@ -1180,9 +1205,44 @@ input, textarea, select { font-family: inherit; }
       </div>
     </div>
 
+    <!-- Map view (Step 13) -->
+    <div class="view" id="view-map">
+      <div class="view-header">
+        <div class="view-header-left">
+          <div class="page-heading">Map</div>
+          <div class="page-subheading" id="map-count">Loading…</div>
+        </div>
+        <div class="view-actions">
+          <div class="map-basemap-toggle" id="map-basemap-toggle">
+            <button data-base="sat" class="active">Satellite</button>
+            <button data-base="topo">Topo</button>
+            <button data-base="street">Street</button>
+          </div>
+          <button id="map-fit-btn" class="btn ghost">Fit all</button>
+        </div>
+      </div>
+      <div class="map-wrap">
+        <div id="map"></div>
+        <div class="map-panel" id="map-panel">
+          <div class="map-panel-head">
+            <div class="map-panel-title" id="map-panel-title">POI</div>
+            <button class="map-panel-close" id="map-panel-close" aria-label="Close">&times;</button>
+          </div>
+          <div class="map-panel-body" id="map-panel-body"></div>
+          <button class="btn" id="map-panel-edit">Edit this POI</button>
+        </div>
+        <div class="map-legend">
+          <span><i style="background:#ff7c32"></i>Winter chute</span>
+          <span><i style="background:#7dd4f8"></i>Narrative</span>
+          <span><i style="background:#c8dce8"></i>General</span>
+        </div>
+      </div>
+    </div>
+
   </div>
 </section>
 
+<script src="https://unpkg.com/maplibre-gl@4/dist/maplibre-gl.js"></script>
 <script>
 'use strict';
 
@@ -1307,7 +1367,7 @@ function showDashboard() {
 // ─── Tabs ─────────────────────────────────────────────────
 
 function setActiveTab(name) {
-  const valid = ['dashboard', 'pois', 'form'];
+  const valid = ['dashboard', 'pois', 'form', 'map'];
   if (!valid.includes(name)) name = 'dashboard';
   // Only highlight tab strip for dashboard/pois (form is a sub-view of pois)
   document.querySelectorAll('.tab').forEach(t => {
@@ -1321,6 +1381,7 @@ function setActiveTab(name) {
     history.replaceState(null, '', '#' + name);
   }
   if (name === 'pois') loadPOIs();
+  if (name === 'map') showMap();
 }
 
 document.querySelectorAll('.tab').forEach(t => {
@@ -2441,6 +2502,186 @@ $logoutBtn.addEventListener('click', logout);
   }
   showLogin();
 })();
+
+// ─── Map view (Step 13) ───────────────────────────────────
+// Read-only map of the POI catalog. Lazy-initialized on first
+// Map-tab open so a map issue can never affect other views.
+
+const MAP_BASEMAPS = {
+  sat: {
+    tiles: ['https://services.arcgisonline.com/arcgis/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}'],
+    attribution: 'Imagery © Esri, Maxar, Earthstar Geographics', maxzoom: 19,
+  },
+  topo: {
+    tiles: ['https://a.tile.opentopomap.org/{z}/{x}/{y}.png', 'https://b.tile.opentopomap.org/{z}/{x}/{y}.png'],
+    attribution: '© OpenTopoMap (CC-BY-SA), © OpenStreetMap contributors', maxzoom: 17,
+  },
+  street: {
+    tiles: ['https://tile.openstreetmap.org/{z}/{x}/{y}.png'],
+    attribution: '© OpenStreetMap contributors', maxzoom: 19,
+  },
+};
+const MAP_TYPE_COLOR = { 'winter-chute': '#ff7c32', 'narrative-poi': '#7dd4f8', 'general': '#c8dce8' };
+const MAP_KH_CENTER = [-117.06, 51.29]; // [lng, lat] fallback
+
+let mapInstance = null;
+let mapBasemap = 'sat';
+let mapMarkers = [];
+
+function mapStyle(key) {
+  const b = MAP_BASEMAPS[key];
+  return {
+    version: 8,
+    sources: { base: { type: 'raster', tiles: b.tiles, tileSize: 256, attribution: b.attribution, maxzoom: b.maxzoom } },
+    layers: [{ id: 'base', type: 'raster', source: 'base' }],
+  };
+}
+
+function mapMetersCircle(lng, lat, meters, pts) {
+  pts = pts || 64;
+  const coords = [];
+  const dLat = meters / 111320;
+  const dLng = meters / (111320 * Math.cos(lat * Math.PI / 180));
+  for (let i = 0; i <= pts; i++) {
+    const t = (i / pts) * 2 * Math.PI;
+    coords.push([lng + dLng * Math.cos(t), lat + dLat * Math.sin(t)]);
+  }
+  return coords;
+}
+
+function mapBoundsOfData() {
+  const b = new maplibregl.LngLatBounds();
+  let n = 0;
+  for (const poi of state.pois) {
+    if (!Array.isArray(poi.topLatLon)) continue;
+    b.extend([poi.topLatLon[1], poi.topLatLon[0]]); n++;
+    if (poi.type === 'winter-chute' && Array.isArray(poi.bottomLatLon)) {
+      b.extend([poi.bottomLatLon[1], poi.bottomLatLon[0]]);
+    }
+  }
+  return { bounds: b, count: n };
+}
+
+function mapFitToData() {
+  if (!mapInstance) return;
+  const { bounds, count } = mapBoundsOfData();
+  if (count === 1) mapInstance.easeTo({ center: bounds.getCenter(), zoom: 15, duration: 300 });
+  else if (count > 1) mapInstance.fitBounds(bounds, { padding: 80, maxZoom: 16, duration: 300 });
+  else mapInstance.easeTo({ center: MAP_KH_CENTER, zoom: 12, duration: 300 });
+}
+
+// Radius circles + chute-axis lines. Re-added after every setStyle (styledata).
+function mapAddOverlays() {
+  if (!mapInstance || !mapInstance.isStyleLoaded()) return;
+  const circles = { type: 'FeatureCollection', features: [] };
+  const axes = { type: 'FeatureCollection', features: [] };
+  for (const poi of state.pois) {
+    if (!Array.isArray(poi.topLatLon)) continue;
+    const lat = poi.topLatLon[0], lng = poi.topLatLon[1];
+    const r = Number(poi.radiusMeters) || 25;
+    circles.features.push({ type: 'Feature', properties: { color: MAP_TYPE_COLOR[poi.type] || '#c8dce8' },
+      geometry: { type: 'Polygon', coordinates: [mapMetersCircle(lng, lat, r)] } });
+    if (poi.type === 'winter-chute' && Array.isArray(poi.bottomLatLon)) {
+      axes.features.push({ type: 'Feature', properties: {},
+        geometry: { type: 'LineString', coordinates: [[lng, lat], [poi.bottomLatLon[1], poi.bottomLatLon[0]]] } });
+    }
+  }
+  if (mapInstance.getSource('poi-circles')) {
+    mapInstance.getSource('poi-circles').setData(circles);
+    mapInstance.getSource('poi-axes').setData(axes);
+    return;
+  }
+  mapInstance.addSource('poi-axes', { type: 'geojson', data: axes });
+  mapInstance.addSource('poi-circles', { type: 'geojson', data: circles });
+  mapInstance.addLayer({ id: 'poi-axes-line', type: 'line', source: 'poi-axes',
+    paint: { 'line-color': '#ff7c32', 'line-width': 2, 'line-dasharray': [2, 1] } });
+  mapInstance.addLayer({ id: 'poi-circles-fill', type: 'fill', source: 'poi-circles',
+    paint: { 'fill-color': ['get', 'color'], 'fill-opacity': 0.15 } });
+  mapInstance.addLayer({ id: 'poi-circles-line', type: 'line', source: 'poi-circles',
+    paint: { 'line-color': ['get', 'color'], 'line-width': 1.5, 'line-opacity': 0.85 } });
+}
+
+function mapRenderMarkers() {
+  mapMarkers.forEach(m => m.remove());
+  mapMarkers = [];
+  let n = 0;
+  for (const poi of state.pois) {
+    if (!Array.isArray(poi.topLatLon)) continue;
+    const lat = poi.topLatLon[0], lng = poi.topLatLon[1];
+    const el = document.createElement('div');
+    el.className = 'map-pin';
+    el.style.background = MAP_TYPE_COLOR[poi.type] || '#c8dce8';
+    el.title = poi.name;
+    el.addEventListener('click', (e) => { e.stopPropagation(); mapOpenPanel(poi.id); });
+    mapMarkers.push(new maplibregl.Marker({ element: el }).setLngLat([lng, lat]).addTo(mapInstance));
+    n++;
+  }
+  const el = document.getElementById('map-count');
+  if (el) el.textContent = n === 1 ? '1 POI' : n + ' POIs';
+}
+
+function mapOpenPanel(poiId) {
+  const poi = state.pois.find(p => p.id === poiId);
+  if (!poi) return;
+  const row = (k, v) => '<div class="mp-row"><span class="mp-k">' + k + '</span><span class="mp-v">' + escapeHTML(String(v)) + '</span></div>';
+  const rows = [];
+  rows.push(row('ID', poi.id));
+  rows.push(row('Type', poi.type));
+  if (poi.region) rows.push(row('Region', poi.region));
+  if (Array.isArray(poi.topLatLon)) rows.push(row('Top', poi.topLatLon[0].toFixed(6) + ', ' + poi.topLatLon[1].toFixed(6)));
+  if (Array.isArray(poi.bottomLatLon)) rows.push(row('Bottom', poi.bottomLatLon[0].toFixed(6) + ', ' + poi.bottomLatLon[1].toFixed(6)));
+  rows.push(row('Radius', (poi.radiusMeters != null ? poi.radiusMeters : '—') + ' m'));
+  if (poi.type === 'winter-chute') {
+    if (poi.slopeMin_deg != null) rows.push(row('Slope', poi.slopeMin_deg + '–' + poi.slopeMax_deg + '°'));
+    if (poi.topElev_m != null) rows.push(row('Elevation', poi.topElev_m + ' → ' + poi.bottomElev_m + ' m'));
+    if (poi.stormDirPreference) rows.push(row('Storm dir', poi.stormDirPreference));
+  }
+  const imgCount = poi.images ? Object.values(poi.images).filter(Boolean).length : 0;
+  rows.push(row('Images', imgCount + ' / 3'));
+  document.getElementById('map-panel-title').textContent = poi.name;
+  document.getElementById('map-panel-body').innerHTML = rows.join('');
+  document.getElementById('map-panel-edit').onclick = () => openEditForm(poi.id);
+  document.getElementById('map-panel').classList.add('open');
+  if (Array.isArray(poi.topLatLon)) mapInstance.easeTo({ center: [poi.topLatLon[1], poi.topLatLon[0]], duration: 400 });
+}
+
+function mapSetBasemap(key) {
+  if (!MAP_BASEMAPS[key] || !mapInstance) return;
+  mapBasemap = key;
+  mapInstance.setStyle(mapStyle(key)); // DOM markers persist; overlays re-added via styledata
+  document.querySelectorAll('#map-basemap-toggle button').forEach(b => {
+    b.classList.toggle('active', b.dataset.base === key);
+  });
+}
+
+function initMap() {
+  if (mapInstance) return;
+  if (typeof maplibregl === 'undefined') { toast('Map library failed to load — check your connection.', 'err'); return; }
+  mapInstance = new maplibregl.Map({
+    container: 'map', style: mapStyle(mapBasemap),
+    center: MAP_KH_CENTER, zoom: 12, maxZoom: 20,
+  });
+  mapInstance.addControl(new maplibregl.NavigationControl(), 'top-right');
+  mapInstance.addControl(new maplibregl.ScaleControl({ maxWidth: 120, unit: 'metric' }), 'bottom-left');
+  mapInstance.on('styledata', mapAddOverlays);
+  document.querySelectorAll('#map-basemap-toggle button').forEach(btn => {
+    btn.addEventListener('click', () => mapSetBasemap(btn.dataset.base));
+  });
+  const fitBtn = document.getElementById('map-fit-btn');
+  if (fitBtn) fitBtn.addEventListener('click', mapFitToData);
+  const closeBtn = document.getElementById('map-panel-close');
+  if (closeBtn) closeBtn.addEventListener('click', () => document.getElementById('map-panel').classList.remove('open'));
+}
+
+async function showMap() {
+  if (!state.pois.length) { try { await loadPOIs(); } catch (e) {} }
+  initMap();
+  if (!mapInstance) return;
+  requestAnimationFrame(() => mapInstance.resize());
+  const render = () => { mapInstance.resize(); mapAddOverlays(); mapRenderMarkers(); mapFitToData(); };
+  if (mapInstance.isStyleLoaded()) render();
+  else mapInstance.once('load', render);
+}
 
 window.loadPOIs = loadPOIs;
 </script>
