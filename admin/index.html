@@ -810,6 +810,8 @@ input, textarea, select { font-family: inherit; }
 .map-basemap-toggle button.active { background: var(--coral); color: #1a0e06; font-weight: 700; }
 .map-pin { width: 15px; height: 15px; border-radius: 50% 50% 50% 0; transform: rotate(-45deg); border: 2px solid var(--ink); box-shadow: 0 1px 5px rgba(0,0,0,.6); cursor: pointer; }
 .map-pin:hover { filter: brightness(1.15); }
+.map-pin-bottom { border-radius: 50%; transform: none; width: 14px; height: 14px; border-width: 3px; border-style: solid; background: var(--ink) !important; }
+.map-legend i.leg-bottom { background: transparent; border: 2px solid var(--text); }
 .map-panel { position: absolute; top: 12px; right: 12px; width: 280px; max-width: calc(100% - 24px); background: rgba(17,24,32,0.97); border: 1px solid var(--rim-hi); border-radius: 12px; padding: 14px; box-shadow: 0 8px 30px rgba(0,0,0,.5); transform: translateX(calc(100% + 24px)); transition: transform .25s ease; z-index: 5; }
 .map-panel.open { transform: translateX(0); }
 .map-panel-head { display: flex; align-items: center; justify-content: space-between; margin-bottom: 8px; gap: 10px; }
@@ -1262,6 +1264,7 @@ input, textarea, select { font-family: inherit; }
           <span><i style="background:#ff7c32"></i>Winter chute</span>
           <span><i style="background:#7dd4f8"></i>Narrative</span>
           <span><i style="background:#c8dce8"></i>General</span>
+          <span><i class="leg-bottom"></i>Chute bottom</span>
         </div>
       </div>
     </div>
@@ -2637,7 +2640,9 @@ let mapInstance = null;
 let mapBasemap = 'sat';
 let mapMarkers = [];
 let mapArmed = false;        // Step 14: "Add on map" armed state
-let mapPendingMove = null;   // Step 14: { marker, poi, from, to } awaiting confirm
+let mapPendingMove = null;   // Step 14: { marker, poi, end, from, to } awaiting confirm
+let mapArmTop = null;        // captured top point during two-click placement
+let mapArmTempMarker = null; // temporary marker showing the captured top
 
 function mapStyle(key) {
   const b = MAP_BASEMAPS[key];
@@ -2712,35 +2717,47 @@ function mapAddOverlays() {
     paint: { 'line-color': ['get', 'color'], 'line-width': 1.5, 'line-opacity': 0.85 } });
 }
 
+// Build one draggable marker for a given end ('top' | 'bottom') of a POI.
+function mapAddMarker(poi, end) {
+  const ll = end === 'top' ? poi.topLatLon : poi.bottomLatLon;
+  if (!Array.isArray(ll)) return null;
+  const lat = ll[0], lng = ll[1];
+  const color = MAP_TYPE_COLOR[poi.type] || '#c8dce8';
+  const el = document.createElement('div');
+  el.className = end === 'top' ? 'map-pin' : 'map-pin map-pin-bottom';
+  if (end === 'top') el.style.background = color;
+  else el.style.borderColor = color; // bottom = hollow ring in the type color
+  el.title = poi.name + (end === 'bottom' ? ' — bottom (drag to move)' : ' — top (drag to move)');
+  el.addEventListener('click', (e) => {
+    e.stopPropagation();
+    if (el._justDragged) { el._justDragged = false; return; }
+    mapOpenPanel(poi.id);
+  });
+  const marker = new maplibregl.Marker({ element: el, draggable: true }).setLngLat([lng, lat]).addTo(mapInstance);
+  let dragFrom = null;
+  marker.on('dragstart', () => {
+    dragFrom = marker.getLngLat();
+    document.getElementById('map-panel').classList.remove('open');
+  });
+  marker.on('dragend', () => {
+    el._justDragged = true;
+    setTimeout(() => { el._justDragged = false; }, 300);
+    mapShowMoveConfirm(marker, poi, end, dragFrom, marker.getLngLat());
+  });
+  return marker;
+}
+
 function mapRenderMarkers() {
   mapMarkers.forEach(m => m.remove());
   mapMarkers = [];
   let n = 0;
   for (const poi of state.pois) {
-    if (!Array.isArray(poi.topLatLon)) continue;
-    const lat = poi.topLatLon[0], lng = poi.topLatLon[1];
-    const el = document.createElement('div');
-    el.className = 'map-pin';
-    el.style.background = MAP_TYPE_COLOR[poi.type] || '#c8dce8';
-    el.title = poi.name + ' (drag to move)';
-    el.addEventListener('click', (e) => {
-      e.stopPropagation();
-      if (el._justDragged) { el._justDragged = false; return; } // suppress click right after a drag
-      mapOpenPanel(poi.id);
-    });
-    const marker = new maplibregl.Marker({ element: el, draggable: true }).setLngLat([lng, lat]).addTo(mapInstance);
-    let dragFrom = null;
-    marker.on('dragstart', () => {
-      dragFrom = marker.getLngLat();
-      document.getElementById('map-panel').classList.remove('open'); // close detail panel during a move
-    });
-    marker.on('dragend', () => {
-      el._justDragged = true;
-      setTimeout(() => { el._justDragged = false; }, 300);
-      mapShowMoveConfirm(marker, poi, dragFrom, marker.getLngLat());
-    });
-    mapMarkers.push(marker);
-    n++;
+    const top = mapAddMarker(poi, 'top');
+    if (top) { mapMarkers.push(top); n++; }
+    if (poi.type === 'winter-chute' && Array.isArray(poi.bottomLatLon)) {
+      const bot = mapAddMarker(poi, 'bottom');
+      if (bot) mapMarkers.push(bot);
+    }
   }
   const el = document.getElementById('map-count');
   if (el) el.textContent = n === 1 ? '1 POI' : n + ' POIs';
@@ -2752,30 +2769,74 @@ function mapUpdateArmUI() {
   if (wrap) wrap.classList.toggle('armed', mapArmed);
   const btn = document.getElementById('map-addmode-btn');
   if (btn) btn.classList.toggle('active', mapArmed);
+  const hint = document.querySelector('.map-arm-hint');
+  if (hint) {
+    hint.textContent = !mapArmed ? '' :
+      (mapArmTop === null
+        ? 'Click the TOP point on the map · Esc to cancel'
+        : 'Top set ✓ — now click the BOTTOM (for a chute) · Enter for a single point · Esc to cancel');
+  }
 }
-function mapToggleArm() {
-  mapArmed = !mapArmed;
-  if (mapArmed && mapPendingMove) mapCancelMove(); // can't place mid-move
+
+function mapArmCancel() {
+  mapArmed = false;
+  mapArmTop = null;
+  if (mapArmTempMarker) { mapArmTempMarker.remove(); mapArmTempMarker = null; }
   mapUpdateArmUI();
 }
-function mapPlaceAt(lng, lat) {
-  const rLat = Number(lat.toFixed(6));
-  const rLng = Number(lng.toFixed(6));
-  openAddForm();                       // blank new-POI form + switch to form view
-  state.form.topLat = rLat;
-  state.form.topLon = rLng;
-  const latEl = document.getElementById('f-topLat');
-  const lonEl = document.getElementById('f-topLon');
-  if (latEl) latEl.value = rLat;
-  if (lonEl) lonEl.value = rLng;
+
+function mapToggleArm() {
+  if (mapArmed) { mapArmCancel(); return; }   // toggling off
+  if (mapPendingMove) mapCancelMove();        // can't place mid-move
+  mapArmed = true;
+  mapArmTop = null;
+  mapUpdateArmUI();
+}
+
+// First armed click captures the top (drops a temp marker); second captures the bottom.
+function mapArmedClick(lngLat) {
+  if (mapArmTop === null) {
+    mapArmTop = lngLat;
+    const el = document.createElement('div');
+    el.className = 'map-pin';
+    el.style.background = '#ff7c32';
+    el.style.pointerEvents = 'none'; // let the bottom click pass through to the map
+    mapArmTempMarker = new maplibregl.Marker({ element: el }).setLngLat(lngLat).addTo(mapInstance);
+    mapUpdateArmUI();
+  } else {
+    mapFinishPlacement(mapArmTop, lngLat);
+  }
+}
+
+function mapSetInput(id, v) { const el = document.getElementById(id); if (el) el.value = v; }
+
+// Opens a blank New-POI form pre-filled with the captured coordinates.
+function mapFinishPlacement(topLL, bottomLL) {
+  mapArmed = false;
+  if (mapArmTempMarker) { mapArmTempMarker.remove(); mapArmTempMarker = null; }
+  mapArmTop = null;
+  mapUpdateArmUI();
+
+  openAddForm(); // blank form + switch to form view
+  const tLat = Number(topLL.lat.toFixed(6)), tLon = Number(topLL.lng.toFixed(6));
+  state.form.topLat = tLat; state.form.topLon = tLon;
+  mapSetInput('f-topLat', tLat); mapSetInput('f-topLon', tLon);
+  if (bottomLL) {
+    const bLat = Number(bottomLL.lat.toFixed(6)), bLon = Number(bottomLL.lng.toFixed(6));
+    state.form.bottomLat = bLat; state.form.bottomLon = bLon;
+    mapSetInput('f-bottomLat', bLat); mapSetInput('f-bottomLon', bLon);
+    toast('Top + bottom filled from map — pick Winter chute and finish.', 'ok');
+  } else {
+    toast('Top filled from map — pick a type and finish.', 'ok');
+  }
   if (typeof updateFormStatus === 'function') updateFormStatus();
-  toast('Top coordinates filled from map — pick a type and finish the form.', 'ok');
 }
 
 // ── Step 14: drag-to-move confirm ──
-function mapShowMoveConfirm(marker, poi, from, to) {
-  mapPendingMove = { marker, poi, from, to };
-  document.getElementById('mmc-title').textContent = 'Move "' + poi.name + '"?';
+function mapShowMoveConfirm(marker, poi, end, from, to) {
+  mapPendingMove = { marker, poi, end, from, to };
+  document.getElementById('mmc-title').textContent =
+    'Move ' + (end === 'bottom' ? 'bottom' : 'top') + ' of "' + poi.name + '"?';
   document.getElementById('mmc-coords').innerHTML =
     '<span class="old">From&nbsp;&nbsp;' + from.lat.toFixed(6) + ', ' + from.lng.toFixed(6) + '</span><br>' +
     'To&nbsp;&nbsp;&nbsp;&nbsp;' + to.lat.toFixed(6) + ', ' + to.lng.toFixed(6);
@@ -2793,11 +2854,13 @@ function mapCancelMove() {
 }
 async function mapSaveMove() {
   if (!mapPendingMove) return;
-  const { marker, poi, from, to } = mapPendingMove;
+  const { marker, poi, end, from, to } = mapPendingMove;
   const sb = document.getElementById('mmc-save');
   sb.disabled = true; sb.textContent = 'Saving…';
   const updated = JSON.parse(JSON.stringify(poi));   // preserve all fields
-  updated.topLatLon = [Number(to.lat.toFixed(6)), Number(to.lng.toFixed(6))];
+  const newCoord = [Number(to.lat.toFixed(6)), Number(to.lng.toFixed(6))];
+  if (end === 'bottom') updated.bottomLatLon = newCoord;
+  else updated.topLatLon = newCoord;
   try {
     const resp = await fetch(`${API_BASE}/pois`, {
       method: 'POST',
@@ -2890,12 +2953,13 @@ function initMap() {
   const mmcCancel = document.getElementById('mmc-cancel');
   if (mmcCancel) mmcCancel.addEventListener('click', mapCancelMove);
   mapInstance.on('click', (e) => {
-    if (!mapArmed) return;            // only an armed click places a POI
-    mapArmed = false; mapUpdateArmUI();
-    mapPlaceAt(e.lngLat.lng, e.lngLat.lat);
+    if (!mapArmed) return;            // only armed clicks place points
+    mapArmedClick(e.lngLat);
   });
   document.addEventListener('keydown', (e) => {
-    if (e.key === 'Escape' && mapArmed) { mapArmed = false; mapUpdateArmUI(); }
+    if (!mapArmed) return;
+    if (e.key === 'Escape') mapArmCancel();
+    else if (e.key === 'Enter' && mapArmTop !== null) mapFinishPlacement(mapArmTop, null);
   });
 }
 
