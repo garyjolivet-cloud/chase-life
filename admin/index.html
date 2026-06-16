@@ -843,6 +843,7 @@ input, textarea, select { font-family: inherit; }
 .compass-picker.field-invalid { box-shadow: 0 0 0 2px rgba(255,58,92,0.28); border-radius: 8px; }
 .field-error-msg { color: var(--danger); font-size: 0.72rem; margin-top: 3px; }
 .form-footer-status.attention { color: var(--danger); }
+.field-approx-msg { color: var(--amber); font-size: 0.72rem; margin-top: 3px; }
 </style>
 </head>
 <body>
@@ -1697,6 +1698,7 @@ function blankFormState() {
 
 function resetFormUI() {
   formTouched.clear();
+  document.querySelectorAll('.field-approx-msg').forEach(n => n.remove());
   // Clear inputs
   document.querySelectorAll('#view-form input, #view-form textarea, #view-form select').forEach(el => {
     if (el.type === 'checkbox') el.checked = false;
@@ -2018,6 +2020,11 @@ document.getElementById('view-form').addEventListener('focusout', (e) => {
 document.getElementById('compass-picker').addEventListener('click', () => {
   formTouched.add('compass-picker');
   updateFormStatus();
+});
+// Editing an auto-filled elevation clears its "approximate" note (it's now your value).
+['f-topElev', 'f-bottomElev'].forEach((id) => {
+  const el = document.getElementById(id);
+  if (el) el.addEventListener('input', () => mapClearApprox(id));
 });
 
 // Wire generic input handlers
@@ -2811,6 +2818,56 @@ function mapArmedClick(lngLat) {
 function mapSetInput(id, v) { const el = document.getElementById(id); if (el) el.value = v; }
 
 // Opens a blank New-POI form pre-filled with the captured coordinates.
+// ── Elevation auto-fill (Open-Meteo, free 90 m global DEM, no key) ──
+// Browser-side fetch. Values are approximate; flagged for field verification.
+async function mapFetchElevations(latlngs) {
+  const lats = latlngs.map(p => p.lat).join(',');
+  const lons = latlngs.map(p => p.lng).join(',');
+  const url = 'https://api.open-meteo.com/v1/elevation?latitude=' + lats + '&longitude=' + lons;
+  const resp = await fetch(url);
+  if (!resp.ok) throw new Error('elevation HTTP ' + resp.status);
+  const data = await resp.json();
+  if (!data || !Array.isArray(data.elevation)) throw new Error('bad elevation response');
+  return data.elevation;
+}
+
+function mapMarkApprox(id) {
+  mapClearApprox(id);
+  const el = document.getElementById(id);
+  if (!el) return;
+  const note = document.createElement('div');
+  note.className = 'field-approx-msg';
+  note.dataset.approxFor = id;
+  note.textContent = '≈ auto-filled (~90 m) — verify';
+  el.insertAdjacentElement('afterend', note);
+}
+function mapClearApprox(id) {
+  document.querySelectorAll('.field-approx-msg[data-approx-for="' + id + '"]').forEach(n => n.remove());
+}
+
+async function mapAutoFillElevation(topLL, bottomLL) {
+  try {
+    const elevs = await mapFetchElevations([
+      { lat: topLL.lat, lng: topLL.lng },
+      { lat: bottomLL.lat, lng: bottomLL.lng },
+    ]);
+    const te = Math.round(elevs[0]);
+    const be = Math.round(elevs[1]);
+    let filled = false;
+    if (Number.isFinite(te) && typeof state.form.topElev_m !== 'number') {
+      state.form.topElev_m = te; mapSetInput('f-topElev', te); mapMarkApprox('f-topElev'); filled = true;
+    }
+    if (Number.isFinite(be) && typeof state.form.bottomElev_m !== 'number') {
+      state.form.bottomElev_m = be; mapSetInput('f-bottomElev', be); mapMarkApprox('f-bottomElev'); filled = true;
+    }
+    if (typeof updateFormStatus === 'function') updateFormStatus();
+    toast(filled ? 'Elevation auto-filled (approx, ~90 m) — verify before relying on it'
+                 : 'Elevation already set — left your values', 'ok');
+  } catch (e) {
+    toast('Couldn’t fetch elevation — enter it manually', 'err');
+  }
+}
+
 function mapFinishPlacement(topLL, bottomLL) {
   mapArmed = false;
   if (mapArmTempMarker) { mapArmTempMarker.remove(); mapArmTempMarker = null; }
@@ -2825,7 +2882,8 @@ function mapFinishPlacement(topLL, bottomLL) {
     const bLat = Number(bottomLL.lat.toFixed(6)), bLon = Number(bottomLL.lng.toFixed(6));
     state.form.bottomLat = bLat; state.form.bottomLon = bLon;
     mapSetInput('f-bottomLat', bLat); mapSetInput('f-bottomLon', bLon);
-    toast('Top + bottom filled from map — pick Winter chute and finish.', 'ok');
+    toast('Top + bottom filled — fetching elevation…', 'ok');
+    mapAutoFillElevation(topLL, bottomLL);
   } else {
     toast('Top filled from map — pick a type and finish.', 'ok');
   }
