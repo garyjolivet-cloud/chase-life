@@ -836,6 +836,11 @@ input, textarea, select { font-family: inherit; }
 .map-move-confirm .mmc-coords .old { color: var(--muted); }
 .map-move-confirm .mmc-btns { display: flex; gap: 8px; }
 .map-move-confirm .mmc-btns .btn { flex: 1; }
+/* ── field-level validation indicators ── */
+.field-invalid { border-color: var(--danger) !important; box-shadow: 0 0 0 2px rgba(255,58,92,0.28); }
+.compass-picker.field-invalid { box-shadow: 0 0 0 2px rgba(255,58,92,0.28); border-radius: 8px; }
+.field-error-msg { color: var(--danger); font-size: 0.72rem; margin-top: 3px; }
+.form-footer-status.attention { color: var(--danger); }
 </style>
 </head>
 <body>
@@ -1688,6 +1693,7 @@ function blankFormState() {
 }
 
 function resetFormUI() {
+  formTouched.clear();
   // Clear inputs
   document.querySelectorAll('#view-form input, #view-form textarea, #view-form select').forEach(el => {
     if (el.type === 'checkbox') el.checked = false;
@@ -1999,6 +2005,18 @@ document.getElementById('type-selector').addEventListener('click', (e) => {
   updateFormStatus();
 });
 
+// Mark fields as "touched" so invalid ones highlight after the user interacts.
+document.getElementById('view-form').addEventListener('focusout', (e) => {
+  if (e.target && e.target.id && (e.target.id.indexOf('f-') === 0)) {
+    formTouched.add(e.target.id);
+    updateFormStatus();
+  }
+});
+document.getElementById('compass-picker').addEventListener('click', () => {
+  formTouched.add('compass-picker');
+  updateFormStatus();
+});
+
 // Wire generic input handlers
 function wireField(id, key, parseFn) {
   const el = document.getElementById(id);
@@ -2200,6 +2218,69 @@ function validatePOIClient(poi) {
   return errors;
 }
 
+// ── field-level validation indicators ──
+const formTouched = new Set();
+
+// Returns { fieldId: shortMessage } for every invalid field in the current form.
+// Mirrors validatePOIClient at field granularity (it stays the authority for save).
+function formFieldErrors() {
+  const f = state.form;
+  const bad = {};
+  if (!f) return bad;
+  if (!f.name || !String(f.name).trim()) bad['f-name'] = 'Required';
+  if (!f.id) bad['f-id'] = 'Required';
+  else if (!ID_REGEX.test(f.id)) bad['f-id'] = 'Lowercase letters, digits, hyphens only';
+  if (typeof f.topLat !== 'number') bad['f-topLat'] = 'Required';
+  else if (f.topLat < KH_BBOX.latMin || f.topLat > KH_BBOX.latMax) bad['f-topLat'] = `Out of range (${KH_BBOX.latMin}–${KH_BBOX.latMax})`;
+  if (typeof f.topLon !== 'number') bad['f-topLon'] = 'Required';
+  else if (f.topLon < KH_BBOX.lonMin || f.topLon > KH_BBOX.lonMax) bad['f-topLon'] = `Out of range (${KH_BBOX.lonMin}–${KH_BBOX.lonMax})`;
+  if (typeof f.radiusMeters !== 'number') bad['f-radius'] = 'Required';
+  else if (f.radiusMeters < RADIUS_MIN || f.radiusMeters > RADIUS_MAX) bad['f-radius'] = `${RADIUS_MIN}–${RADIUS_MAX} m`;
+  if (f.type === 'winter-chute') {
+    if (typeof f.bottomLat !== 'number') bad['f-bottomLat'] = 'Required';
+    else if (f.bottomLat < KH_BBOX.latMin || f.bottomLat > KH_BBOX.latMax) bad['f-bottomLat'] = 'Out of range';
+    if (typeof f.bottomLon !== 'number') bad['f-bottomLon'] = 'Required';
+    else if (f.bottomLon < KH_BBOX.lonMin || f.bottomLon > KH_BBOX.lonMax) bad['f-bottomLon'] = 'Out of range';
+    if (typeof f.slopeMin_deg !== 'number') bad['f-slopeMin'] = 'Required';
+    if (typeof f.slopeMax_deg !== 'number') bad['f-slopeMax'] = 'Required';
+    if (!bad['f-slopeMin'] && !bad['f-slopeMax'] && f.slopeMin_deg > f.slopeMax_deg) bad['f-slopeMax'] = 'Max must be ≥ min';
+    if (typeof f.widthMin_m !== 'number') bad['f-widthMin'] = 'Required';
+    if (typeof f.widthMax_m !== 'number') bad['f-widthMax'] = 'Required';
+    if (!bad['f-widthMin'] && !bad['f-widthMax'] && f.widthMin_m > f.widthMax_m) bad['f-widthMax'] = 'Max must be ≥ min';
+    if (typeof f.topElev_m !== 'number') bad['f-topElev'] = 'Required';
+    if (typeof f.bottomElev_m !== 'number') bad['f-bottomElev'] = 'Required';
+    if (!bad['f-topElev'] && !bad['f-bottomElev'] && f.topElev_m < f.bottomElev_m) bad['f-topElev'] = 'Must be ≥ bottom';
+    if (!COMPASS_16.includes(f.stormDirPreference)) bad['compass-picker'] = 'Pick a direction';
+  } else if (f.type === 'narrative-poi') {
+    if (!f.audioUrl) bad['f-audioUrl'] = 'Required';
+    if (!VALID_SEASONS.includes(f.season)) bad['f-season'] = 'Pick a season';
+  }
+  return bad;
+}
+
+function formFieldLabel(id) {
+  if (id === 'compass-picker') return 'Storm direction';
+  const lab = document.querySelector('label[for="' + id + '"]');
+  return lab ? lab.textContent.replace('*', '').trim() : id;
+}
+
+// Ring + message on invalid fields. Only paints fields the user has touched,
+// so a freshly-opened form doesn't light up red (the footer still names them).
+function paintFieldErrors(bad) {
+  document.querySelectorAll('#view-form .field-invalid').forEach(el => el.classList.remove('field-invalid'));
+  document.querySelectorAll('#view-form .field-error-msg').forEach(el => el.remove());
+  for (const id in bad) {
+    if (!formTouched.has(id)) continue;
+    const el = document.getElementById(id);
+    if (!el) continue;
+    el.classList.add('field-invalid');
+    const msg = document.createElement('div');
+    msg.className = 'field-error-msg';
+    msg.textContent = bad[id];
+    el.insertAdjacentElement('afterend', msg);
+  }
+}
+
 function updateFormStatus() {
   if (!state.form) return;
   const $status = document.getElementById('form-status');
@@ -2214,13 +2295,19 @@ function updateFormStatus() {
 
   const poi = buildPOIFromForm();
   const errs = validatePOIClient(poi);
+  const bad = formFieldErrors();
+  paintFieldErrors(bad);
   if (errs.length === 0) {
     $status.textContent = 'Ready to save.';
     $status.className = 'form-footer-status ready';
     $save.disabled = state.saving;
   } else {
-    $status.textContent = `${errs.length} field${errs.length === 1 ? '' : 's'} need attention.`;
-    $status.className = 'form-footer-status';
+    const labels = Object.keys(bad).map(formFieldLabel);
+    const shown = labels.slice(0, 4).join(', ');
+    const more = labels.length > 4 ? ` +${labels.length - 4} more` : '';
+    $status.textContent = labels.length ? ('Needs attention: ' + shown + more)
+                                        : `${errs.length} field${errs.length === 1 ? '' : 's'} need attention.`;
+    $status.className = 'form-footer-status attention';
     $save.disabled = true;
   }
 }
