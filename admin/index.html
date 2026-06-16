@@ -824,6 +824,18 @@ input, textarea, select { font-family: inherit; }
 .map-legend span { display: inline-flex; align-items: center; gap: 5px; }
 .map-legend i { width: 10px; height: 10px; border-radius: 50%; display: inline-block; }
 .maplibregl-ctrl-attrib, .maplibregl-popup { font-size: 0.68rem; }
+/* ── Step 14: place / move ── */
+.map-wrap.armed #map { cursor: crosshair; }
+.map-arm-hint { position: absolute; top: 12px; left: 50%; transform: translateX(-50%); background: var(--coral); color: #1a0e06; font-weight: 700; font-size: 0.8rem; padding: 7px 14px; border-radius: 8px; z-index: 6; display: none; box-shadow: 0 2px 10px rgba(0,0,0,.4); }
+.map-wrap.armed .map-arm-hint { display: block; }
+.map-addmode-btn.active { background: var(--coral); color: #1a0e06; font-weight: 700; border-color: var(--coral); }
+.map-move-confirm { position: absolute; bottom: 16px; left: 50%; transform: translateX(-50%); background: rgba(17,24,32,0.97); border: 1px solid var(--rim-hi); border-radius: 12px; padding: 12px 14px; z-index: 7; display: none; box-shadow: 0 8px 30px rgba(0,0,0,.5); min-width: 290px; max-width: calc(100% - 24px); }
+.map-move-confirm.open { display: block; }
+.map-move-confirm .mmc-title { font-family: 'Black Han Sans', sans-serif; color: var(--snow); font-size: 0.95rem; margin-bottom: 6px; }
+.map-move-confirm .mmc-coords { font-size: 0.8rem; color: var(--text); font-variant-numeric: tabular-nums; line-height: 1.5; margin-bottom: 10px; }
+.map-move-confirm .mmc-coords .old { color: var(--muted); }
+.map-move-confirm .mmc-btns { display: flex; gap: 8px; }
+.map-move-confirm .mmc-btns .btn { flex: 1; }
 </style>
 </head>
 <body>
@@ -1218,11 +1230,13 @@ input, textarea, select { font-family: inherit; }
             <button data-base="topo">Topo</button>
             <button data-base="street">Street</button>
           </div>
+          <button id="map-addmode-btn" class="btn ghost map-addmode-btn">Add on map</button>
           <button id="map-fit-btn" class="btn ghost">Fit all</button>
         </div>
       </div>
       <div class="map-wrap">
         <div id="map"></div>
+        <div class="map-arm-hint">Click the map to place the new POI's top point · Esc to cancel</div>
         <div class="map-panel" id="map-panel">
           <div class="map-panel-head">
             <div class="map-panel-title" id="map-panel-title">POI</div>
@@ -1230,6 +1244,14 @@ input, textarea, select { font-family: inherit; }
           </div>
           <div class="map-panel-body" id="map-panel-body"></div>
           <button class="btn" id="map-panel-edit">Edit this POI</button>
+        </div>
+        <div class="map-move-confirm" id="map-move-confirm">
+          <div class="mmc-title" id="mmc-title">Move this POI?</div>
+          <div class="mmc-coords" id="mmc-coords"></div>
+          <div class="mmc-btns">
+            <button class="btn ghost" id="mmc-cancel">Cancel</button>
+            <button class="btn" id="mmc-save">Save new location</button>
+          </div>
         </div>
         <div class="map-legend">
           <span><i style="background:#ff7c32"></i>Winter chute</span>
@@ -2527,6 +2549,8 @@ const MAP_KH_CENTER = [-117.06, 51.29]; // [lng, lat] fallback
 let mapInstance = null;
 let mapBasemap = 'sat';
 let mapMarkers = [];
+let mapArmed = false;        // Step 14: "Add on map" armed state
+let mapPendingMove = null;   // Step 14: { marker, poi, from, to } awaiting confirm
 
 function mapStyle(key) {
   const b = MAP_BASEMAPS[key];
@@ -2611,13 +2635,107 @@ function mapRenderMarkers() {
     const el = document.createElement('div');
     el.className = 'map-pin';
     el.style.background = MAP_TYPE_COLOR[poi.type] || '#c8dce8';
-    el.title = poi.name;
-    el.addEventListener('click', (e) => { e.stopPropagation(); mapOpenPanel(poi.id); });
-    mapMarkers.push(new maplibregl.Marker({ element: el }).setLngLat([lng, lat]).addTo(mapInstance));
+    el.title = poi.name + ' (drag to move)';
+    el.addEventListener('click', (e) => {
+      e.stopPropagation();
+      if (el._justDragged) { el._justDragged = false; return; } // suppress click right after a drag
+      mapOpenPanel(poi.id);
+    });
+    const marker = new maplibregl.Marker({ element: el, draggable: true }).setLngLat([lng, lat]).addTo(mapInstance);
+    let dragFrom = null;
+    marker.on('dragstart', () => {
+      dragFrom = marker.getLngLat();
+      document.getElementById('map-panel').classList.remove('open'); // close detail panel during a move
+    });
+    marker.on('dragend', () => {
+      el._justDragged = true;
+      setTimeout(() => { el._justDragged = false; }, 300);
+      mapShowMoveConfirm(marker, poi, dragFrom, marker.getLngLat());
+    });
+    mapMarkers.push(marker);
     n++;
   }
   const el = document.getElementById('map-count');
   if (el) el.textContent = n === 1 ? '1 POI' : n + ' POIs';
+}
+
+// ── Step 14: armed "Add on map" ──
+function mapUpdateArmUI() {
+  const wrap = document.querySelector('.map-wrap');
+  if (wrap) wrap.classList.toggle('armed', mapArmed);
+  const btn = document.getElementById('map-addmode-btn');
+  if (btn) btn.classList.toggle('active', mapArmed);
+}
+function mapToggleArm() {
+  mapArmed = !mapArmed;
+  if (mapArmed && mapPendingMove) mapCancelMove(); // can't place mid-move
+  mapUpdateArmUI();
+}
+function mapPlaceAt(lng, lat) {
+  const rLat = Number(lat.toFixed(6));
+  const rLng = Number(lng.toFixed(6));
+  openAddForm();                       // blank new-POI form + switch to form view
+  state.form.topLat = rLat;
+  state.form.topLon = rLng;
+  const latEl = document.getElementById('f-topLat');
+  const lonEl = document.getElementById('f-topLon');
+  if (latEl) latEl.value = rLat;
+  if (lonEl) lonEl.value = rLng;
+  if (typeof updateFormStatus === 'function') updateFormStatus();
+  toast('Top coordinates filled from map — pick a type and finish the form.', 'ok');
+}
+
+// ── Step 14: drag-to-move confirm ──
+function mapShowMoveConfirm(marker, poi, from, to) {
+  mapPendingMove = { marker, poi, from, to };
+  document.getElementById('mmc-title').textContent = 'Move "' + poi.name + '"?';
+  document.getElementById('mmc-coords').innerHTML =
+    '<span class="old">From&nbsp;&nbsp;' + from.lat.toFixed(6) + ', ' + from.lng.toFixed(6) + '</span><br>' +
+    'To&nbsp;&nbsp;&nbsp;&nbsp;' + to.lat.toFixed(6) + ', ' + to.lng.toFixed(6);
+  document.getElementById('map-move-confirm').classList.add('open');
+}
+function mapFinishMove() {
+  mapPendingMove = null;
+  document.getElementById('map-move-confirm').classList.remove('open');
+  const sb = document.getElementById('mmc-save');
+  sb.disabled = false; sb.textContent = 'Save new location';
+}
+function mapCancelMove() {
+  if (mapPendingMove) mapPendingMove.marker.setLngLat(mapPendingMove.from); // snap back
+  mapFinishMove();
+}
+async function mapSaveMove() {
+  if (!mapPendingMove) return;
+  const { marker, poi, from, to } = mapPendingMove;
+  const sb = document.getElementById('mmc-save');
+  sb.disabled = true; sb.textContent = 'Saving…';
+  const updated = JSON.parse(JSON.stringify(poi));   // preserve all fields
+  updated.topLatLon = [Number(to.lat.toFixed(6)), Number(to.lng.toFixed(6))];
+  try {
+    const resp = await fetch(`${API_BASE}/pois`, {
+      method: 'POST',
+      headers: { 'Authorization': `Bearer ${getStoredToken()}`, 'Content-Type': 'application/json' },
+      body: JSON.stringify(updated),
+    });
+    const data = await resp.json().catch(() => ({}));
+    if (resp.status === 401) { toast('Session expired. Please sign in again.', 'err'); logout(); return; }
+    if (resp.status === 400 && Array.isArray(data.errors)) {
+      toast('Move rejected: ' + data.errors.join('; '), 'err');
+      marker.setLngLat(from); mapFinishMove(); return;
+    }
+    if (!resp.ok) throw new Error(data.error || ('HTTP ' + resp.status));
+    const saved = data.saved || updated;
+    const idx = state.pois.findIndex(p => p.id === poi.id);
+    if (idx >= 0) state.pois[idx] = saved;
+    mapAddOverlays();                  // radius circle + axis line follow the new top point
+    mapRenderMarkers();                // refresh marker references to the saved record
+    toast('Location updated', 'ok');
+    mapFinishMove();
+  } catch (err) {
+    toast('Save failed: ' + err.message, 'err');
+    marker.setLngLat(from);            // snap back on failure
+    mapFinishMove();
+  }
 }
 
 function mapOpenPanel(poiId) {
@@ -2677,6 +2795,21 @@ function initMap() {
   if (fitBtn) fitBtn.addEventListener('click', mapFitToData);
   const closeBtn = document.getElementById('map-panel-close');
   if (closeBtn) closeBtn.addEventListener('click', () => document.getElementById('map-panel').classList.remove('open'));
+  // Step 14 wiring
+  const addBtn = document.getElementById('map-addmode-btn');
+  if (addBtn) addBtn.addEventListener('click', mapToggleArm);
+  const mmcSave = document.getElementById('mmc-save');
+  if (mmcSave) mmcSave.addEventListener('click', mapSaveMove);
+  const mmcCancel = document.getElementById('mmc-cancel');
+  if (mmcCancel) mmcCancel.addEventListener('click', mapCancelMove);
+  mapInstance.on('click', (e) => {
+    if (!mapArmed) return;            // only an armed click places a POI
+    mapArmed = false; mapUpdateArmUI();
+    mapPlaceAt(e.lngLat.lng, e.lngLat.lat);
+  });
+  document.addEventListener('keydown', (e) => {
+    if (e.key === 'Escape' && mapArmed) { mapArmed = false; mapUpdateArmUI(); }
+  });
 }
 
 async function showMap() {
