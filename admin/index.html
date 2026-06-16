@@ -2570,7 +2570,7 @@ function mapFitToData() {
   else mapInstance.easeTo({ center: MAP_KH_CENTER, zoom: 12, duration: 300 });
 }
 
-// Radius circles + chute-axis lines. Re-added after every setStyle (styledata).
+// Radius circles + chute-axis lines. Added once; basemap swaps don't wipe them.
 function mapAddOverlays() {
   if (!mapInstance || !mapInstance.isStyleLoaded()) return;
   const circles = { type: 'FeatureCollection', features: [] };
@@ -2648,9 +2648,16 @@ function mapOpenPanel(poiId) {
 function mapSetBasemap(key) {
   if (!MAP_BASEMAPS[key] || !mapInstance) return;
   mapBasemap = key;
-  mapInstance.setStyle(mapStyle(key)); // DOM markers persist; overlays re-added via styledata
-  document.querySelectorAll('#map-basemap-toggle button').forEach(b => {
-    b.classList.toggle('active', b.dataset.base === key);
+  const b = MAP_BASEMAPS[key];
+  // Swap ONLY the base raster layer/source, so POI overlays + markers are never wiped.
+  if (mapInstance.getLayer('base')) mapInstance.removeLayer('base');
+  if (mapInstance.getSource('base')) mapInstance.removeSource('base');
+  mapInstance.addSource('base', { type: 'raster', tiles: b.tiles, tileSize: 256, attribution: b.attribution, maxzoom: b.maxzoom });
+  // Insert beneath the POI overlays so circles/lines stay visible on top.
+  const beneath = mapInstance.getLayer('poi-axes-line') ? 'poi-axes-line' : undefined;
+  mapInstance.addLayer({ id: 'base', type: 'raster', source: 'base' }, beneath);
+  document.querySelectorAll('#map-basemap-toggle button').forEach(btn => {
+    btn.classList.toggle('active', btn.dataset.base === key);
   });
 }
 
@@ -2663,7 +2670,6 @@ function initMap() {
   });
   mapInstance.addControl(new maplibregl.NavigationControl(), 'top-right');
   mapInstance.addControl(new maplibregl.ScaleControl({ maxWidth: 120, unit: 'metric' }), 'bottom-left');
-  mapInstance.on('styledata', mapAddOverlays);
   document.querySelectorAll('#map-basemap-toggle button').forEach(btn => {
     btn.addEventListener('click', () => mapSetBasemap(btn.dataset.base));
   });
