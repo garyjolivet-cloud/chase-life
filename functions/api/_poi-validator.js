@@ -22,6 +22,7 @@ const COMPASS_16 = [
 
 const VALID_TYPES = ['winter-chute', 'narrative-poi', 'general'];
 const VALID_SEASONS = ['summer', 'winter', 'any'];
+const VALID_DIFFICULTY = ['green', 'blue', 'black', 'double-black'];
 const RADIUS_MIN = 5;
 const RADIUS_MAX = 100;
 const ID_REGEX = /^[a-z0-9]+(-[a-z0-9]+)*$/;
@@ -71,6 +72,12 @@ function validateCommonFields(poi, errors) {
 function validateWinterChuteFields(poi, errors) {
   if (!COMPASS_16.includes(poi.stormDirPreference)) {
     errors.push(`stormDirPreference must be one of the 16 compass labels (got "${poi.stormDirPreference}")`);
+  }
+  if (!VALID_DIFFICULTY.includes(poi.difficulty)) {
+    errors.push(`difficulty must be one of: ${VALID_DIFFICULTY.join(', ')} (got "${poi.difficulty}")`);
+  }
+  if (poi.noFallZone !== undefined && typeof poi.noFallZone !== 'boolean') {
+    errors.push('noFallZone must be a boolean if present');
   }
   if (!Array.isArray(poi.bottomLatLon) || poi.bottomLatLon.length !== 2) {
     errors.push('bottomLatLon is required for winter-chute and must be [lat, lon]');
