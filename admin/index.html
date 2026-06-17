@@ -1330,11 +1330,9 @@ const RUN_REGEX = /^[A-Za-z0-9-]{1,10}$/;
 const FLAG_DEFS = [
   { key: 'cornice',          label: 'Cornice present' },
   { key: 'skiedThisSeason',  label: 'Skied this season' },
-  { key: 'patrolControlled', label: 'Patrol-controlled' },
   { key: 'bookmarked',       label: 'Bookmarked' },
   { key: 'experimental',     label: 'Experimental' },
   { key: 'closesEarly',      label: 'Closes early in day' },
-  { key: 'needsRoping',      label: 'Needs roping' },
   { key: 'noFallZone',       label: 'No-fall zone (consequential)' },
 ];
 
@@ -1604,10 +1602,8 @@ function renderPOICard(poi) {
   const updated = poi.updatedAt ? formatDate(poi.updatedAt) : '—';
 
   const flags = [];
-  if (poi.needsRoping) flags.push({ label: 'Needs roping', cls: 'flag-warn' });
   if (poi.closesEarly) flags.push({ label: 'Closes early', cls: 'flag-warn' });
   if (poi.experimental) flags.push({ label: 'Experimental', cls: 'flag-warn' });
-  if (poi.patrolControlled) flags.push({ label: 'Patrol-ctrl', cls: 'flag-info' });
   if (poi.skiedThisSeason) flags.push({ label: 'Skied 25-26', cls: 'flag-info' });
   if (poi.bookmarked) flags.push({ label: 'Bookmarked', cls: 'flag-info' });
 
@@ -1721,8 +1717,8 @@ function blankFormState() {
     stormDirPreference: '',
     difficulty: '',
     vegetation: '',
-    cornice: false, skiedThisSeason: false, patrolControlled: false,
-    bookmarked: false, experimental: false, closesEarly: false, needsRoping: false, noFallZone: false,
+    cornice: false, skiedThisSeason: false,
+    bookmarked: false, experimental: false, closesEarly: false, noFallZone: false,
     // narrative-poi
     audioUrl: '', narrativeText: '', season: 'any', narrativeAudioAutoPlay: true,
     // images
@@ -1835,11 +1831,9 @@ function openEditForm(poiId) {
     state.form.vegetation = poi.vegetation || '';
     state.form.cornice = !!poi.cornice;
     state.form.skiedThisSeason = !!poi.skiedThisSeason;
-    state.form.patrolControlled = !!poi.patrolControlled;
     state.form.bookmarked = !!poi.bookmarked;
     state.form.experimental = !!poi.experimental;
     state.form.closesEarly = !!poi.closesEarly;
-    state.form.needsRoping = !!poi.needsRoping;
     state.form.noFallZone = !!poi.noFallZone;
     state.form.difficulty = poi.difficulty || '';
     state.form.runNumber = poi.runNumber || '';
@@ -2194,11 +2188,9 @@ function buildPOIFromForm() {
     if (f.vegetation) poi.vegetation = f.vegetation.trim();
     poi.cornice = !!f.cornice;
     poi.skiedThisSeason = !!f.skiedThisSeason;
-    poi.patrolControlled = !!f.patrolControlled;
     poi.bookmarked = !!f.bookmarked;
     poi.experimental = !!f.experimental;
     poi.closesEarly = !!f.closesEarly;
-    poi.needsRoping = !!f.needsRoping;
     poi.noFallZone = !!f.noFallZone;
     if (f.difficulty) poi.difficulty = f.difficulty;
   } else if (f.type === 'narrative-poi') {
