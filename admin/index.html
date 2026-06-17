@@ -1088,6 +1088,11 @@ input, textarea, select { font-family: inherit; }
       <!-- Section: Geometry (winter-chute only) -->
       <div class="form-section" id="section-geometry" style="display:none;">
         <div class="form-section-title">Chute geometry <span class="badge">winter-chute only</span></div>
+        <div class="field">
+          <label for="f-runNumber">Run number <span class="req">*</span></label>
+          <input type="text" id="f-runNumber" placeholder="e.g. 12 or 12A" maxlength="10">
+          <div class="hint">The run's number on the trail map. Digits or a short code (12, 12A, G4).</div>
+        </div>
         <div class="field-row">
           <div class="field">
             <label for="f-bottomLat">Bottom latitude <span class="req">*</span></label>
@@ -1320,6 +1325,7 @@ const VALID_DIFFICULTY = ['green','blue','black','double-black'];
 const RADIUS_MIN = 5;
 const RADIUS_MAX = 100;
 const ID_REGEX = /^[a-z0-9]+(-[a-z0-9]+)*$/;
+const RUN_REGEX = /^[A-Za-z0-9-]{1,10}$/;
 
 const FLAG_DEFS = [
   { key: 'cornice',          label: 'Cornice present' },
@@ -1706,6 +1712,7 @@ function blankFormState() {
     id: '', name: '', region: '', geoDescription: '', notes: '',
     topLat: '', topLon: '', radiusMeters: '',
     // winter-chute
+    runNumber: '',
     bottomLat: '', bottomLon: '',
     slopeMin_deg: '', slopeMax_deg: '',
     widthMin_m: '', widthMax_m: '',
@@ -1834,6 +1841,7 @@ function openEditForm(poiId) {
     state.form.needsRoping = !!poi.needsRoping;
     state.form.noFallZone = !!poi.noFallZone;
     state.form.difficulty = poi.difficulty || '';
+    state.form.runNumber = poi.runNumber || '';
   } else if (poi.type === 'narrative-poi') {
     state.form.audioUrl = poi.audioUrl || '';
     state.form.narrativeText = poi.narrativeText || '';
@@ -1865,6 +1873,7 @@ function openEditForm(poiId) {
     document.getElementById('f-topElev').value = state.form.topElev_m;
     document.getElementById('f-bottomElev').value = state.form.bottomElev_m;
     document.getElementById('f-vegetation').value = state.form.vegetation;
+    document.getElementById('f-runNumber').value = state.form.runNumber;
   } else if (poi.type === 'narrative-poi') {
     document.getElementById('f-audioUrl').value = state.form.audioUrl;
     document.getElementById('f-narrativeText').value = state.form.narrativeText;
@@ -2093,6 +2102,7 @@ wireField('f-region', 'region');
 wireField('f-geoDesc', 'geoDescription');
 wireField('f-notes', 'notes');
 wireField('f-vegetation', 'vegetation');
+wireField('f-runNumber', 'runNumber');
 wireField('f-audioUrl', 'audioUrl');
 wireField('f-narrativeText', 'narrativeText');
 
@@ -2169,6 +2179,7 @@ function buildPOIFromForm() {
   if (f.notes)          poi.notes = f.notes.trim();
 
   if (f.type === 'winter-chute') {
+    if (f.runNumber) poi.runNumber = f.runNumber.trim();
     if (typeof f.bottomLat === 'number' && typeof f.bottomLon === 'number') {
       poi.bottomLatLon = [f.bottomLat, f.bottomLon];
     }
@@ -2270,6 +2281,9 @@ function validatePOIClient(poi) {
     if (!VALID_DIFFICULTY.includes(poi.difficulty)) {
       errors.push('Pick a difficulty: Green, Blue, Black, or Double Black.');
     }
+    if (!poi.runNumber || typeof poi.runNumber !== 'string' || !RUN_REGEX.test(poi.runNumber)) {
+      errors.push('Enter a run number (digits or a short code like 12 or 12A).');
+    }
   } else if (poi.type === 'narrative-poi') {
     if (!poi.audioUrl) errors.push('Audio URL is required for narrative-poi.');
     if (!VALID_SEASONS.includes(poi.season)) errors.push('Pick a season.');
@@ -2312,6 +2326,8 @@ function formFieldErrors() {
     if (!bad['f-topElev'] && !bad['f-bottomElev'] && f.topElev_m < f.bottomElev_m) bad['f-topElev'] = 'Must be ≥ bottom';
     if (!COMPASS_16.includes(f.stormDirPreference)) bad['compass-picker'] = 'Pick a direction';
     if (!VALID_DIFFICULTY.includes(f.difficulty)) bad['difficulty-picker'] = 'Pick one';
+    if (!f.runNumber) bad['f-runNumber'] = 'Required';
+    else if (!RUN_REGEX.test(f.runNumber)) bad['f-runNumber'] = 'Digits or short code';
   } else if (f.type === 'narrative-poi') {
     if (!f.audioUrl) bad['f-audioUrl'] = 'Required';
     if (!VALID_SEASONS.includes(f.season)) bad['f-season'] = 'Pick a season';
@@ -3010,6 +3026,7 @@ function mapOpenPanel(poiId) {
   if (Array.isArray(poi.bottomLatLon)) rows.push(row('Bottom', poi.bottomLatLon[0].toFixed(6) + ', ' + poi.bottomLatLon[1].toFixed(6)));
   rows.push(row('Radius', (poi.radiusMeters != null ? poi.radiusMeters : '—') + ' m'));
   if (poi.type === 'winter-chute') {
+    if (poi.runNumber) rows.push(row('Run #', poi.runNumber));
     if (poi.difficulty) rows.push(row('Difficulty', DIFF_LABEL[poi.difficulty] || poi.difficulty));
     if (poi.noFallZone) rows.push(row('Hazard', 'No-fall zone'));
     if (poi.slopeMin_deg != null) rows.push(row('Slope', poi.slopeMin_deg + '–' + poi.slopeMax_deg + '°'));
