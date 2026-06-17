@@ -24,6 +24,7 @@ function validWinterChute() {
     bottomElev_m: 2120,
     difficulty: 'double-black',
     noFallZone: true,
+    runNumber: '12',
   };
 }
 
@@ -175,4 +176,23 @@ test('V10 — validatePOI: noFallZone must be boolean when present', () => {
   const br = validatePOI(bad);
   assertEq(br.valid, false, 'string noFallZone should be invalid');
   assert(hasError(br, /noFallZone/), 'expected a noFallZone error');
+});
+
+// ─── V11: winter-chute run number is required and format-checked ────────
+test('V11 — validatePOI: winter-chute requires a valid run number', () => {
+  const missing = validWinterChute();
+  delete missing.runNumber;
+  const mr = validatePOI(missing);
+  assertEq(mr.valid, false, 'missing runNumber should be invalid');
+  assert(hasError(mr, /runNumber/), 'expected a runNumber error');
+
+  const bad = validWinterChute();
+  bad.runNumber = 'run 12!'; // spaces + special char
+  assertEq(validatePOI(bad).valid, false, 'malformed runNumber should be invalid');
+
+  for (const rn of ['12', '12A', 'G4', '104']) {
+    const ok = validWinterChute();
+    ok.runNumber = rn;
+    assertEq(validatePOI(ok).valid, true, `runNumber ${rn} should be valid`);
+  }
 });
