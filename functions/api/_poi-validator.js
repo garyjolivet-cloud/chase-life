@@ -26,6 +26,7 @@ const VALID_DIFFICULTY = ['green', 'blue', 'black', 'double-black'];
 const RADIUS_MIN = 5;
 const RADIUS_MAX = 100;
 const ID_REGEX = /^[a-z0-9]+(-[a-z0-9]+)*$/;
+const RUN_REGEX = /^[A-Za-z0-9-]{1,10}$/;
 
 function isInsideKHBbox(latLon) {
   if (!Array.isArray(latLon) || latLon.length !== 2) return false;
@@ -75,6 +76,9 @@ function validateWinterChuteFields(poi, errors) {
   }
   if (!VALID_DIFFICULTY.includes(poi.difficulty)) {
     errors.push(`difficulty must be one of: ${VALID_DIFFICULTY.join(', ')} (got "${poi.difficulty}")`);
+  }
+  if (typeof poi.runNumber !== 'string' || !RUN_REGEX.test(poi.runNumber)) {
+    errors.push('runNumber is required for winter-chute (digits or a short code, e.g. "12" or "12A")');
   }
   if (poi.noFallZone !== undefined && typeof poi.noFallZone !== 'boolean') {
     errors.push('noFallZone must be a boolean if present');
