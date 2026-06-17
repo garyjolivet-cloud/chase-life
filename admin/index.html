@@ -1443,6 +1443,7 @@ function setActiveTab(name) {
     history.replaceState(null, '', '#' + name);
   }
   if (name === 'pois') loadPOIs();
+  if (name === 'dashboard') runStatusChecks();
   if (name === 'map') showMap();
 }
 
