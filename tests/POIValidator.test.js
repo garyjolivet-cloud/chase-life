@@ -22,6 +22,8 @@ function validWinterChute() {
     widthMax_m: 8,
     topElev_m: 2380,
     bottomElev_m: 2120,
+    difficulty: 'double-black',
+    noFallZone: true,
   };
 }
 
@@ -138,4 +140,39 @@ test('V8 — validatePOI: missing audioUrl, bad type, and non-object rejected', 
   // non-object guard
   assertEq(validatePOI(null).valid, false, 'null should be invalid');
   assertEq(validatePOI(42).valid, false, 'number should be invalid');
+});
+
+// ─── V9: winter-chute difficulty is required and validated ──────────────
+test('V9 — validatePOI: winter-chute requires a valid difficulty', () => {
+  const missing = validWinterChute();
+  delete missing.difficulty;
+  const mr = validatePOI(missing);
+  assertEq(mr.valid, false, 'missing difficulty should be invalid');
+  assert(hasError(mr, /difficulty/), 'expected a difficulty error');
+
+  const bad = validWinterChute();
+  bad.difficulty = 'expert'; // not one of green/blue/black/double-black
+  const br = validatePOI(bad);
+  assertEq(br.valid, false, 'bad difficulty should be invalid');
+  assert(hasError(br, /difficulty/), 'expected a difficulty error');
+
+  // each valid level passes
+  for (const d of ['green', 'blue', 'black', 'double-black']) {
+    const ok = validWinterChute();
+    ok.difficulty = d;
+    assertEq(validatePOI(ok).valid, true, `difficulty ${d} should be valid`);
+  }
+});
+
+// ─── V10: noFallZone, if present, must be boolean ───────────────────────
+test('V10 — validatePOI: noFallZone must be boolean when present', () => {
+  const ok = validWinterChute();
+  delete ok.noFallZone; // optional — absence is fine
+  assertEq(validatePOI(ok).valid, true, 'absent noFallZone should be valid');
+
+  const bad = validWinterChute();
+  bad.noFallZone = 'yes'; // string, not boolean
+  const br = validatePOI(bad);
+  assertEq(br.valid, false, 'string noFallZone should be invalid');
+  assert(hasError(br, /noFallZone/), 'expected a noFallZone error');
 });
