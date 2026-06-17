@@ -36,6 +36,7 @@ const RADIUS_MAX = 100;
 // ─── ID format check ────────────────────────────────────────
 // Lowercase letters, digits, hyphens only. Must not start/end with hyphen.
 const ID_REGEX = /^[a-z0-9]+(-[a-z0-9]+)*$/;
+const RUN_REGEX = /^[A-Za-z0-9-]{1,10}$/;
 
 // ─── Helpers ────────────────────────────────────────────────
 
@@ -99,6 +100,9 @@ function validateWinterChuteFields(poi, errors) {
   }
   if (!VALID_DIFFICULTY.includes(poi.difficulty)) {
     errors.push(`difficulty must be one of: ${VALID_DIFFICULTY.join(', ')} (got "${poi.difficulty}")`);
+  }
+  if (typeof poi.runNumber !== 'string' || !RUN_REGEX.test(poi.runNumber)) {
+    errors.push('runNumber is required for winter-chute (digits or a short code, e.g. "12" or "12A")');
   }
   if (poi.noFallZone !== undefined && typeof poi.noFallZone !== 'boolean') {
     errors.push('noFallZone must be a boolean if present');
@@ -186,6 +190,7 @@ export const VALIDATOR_CONSTANTS = {
   VALID_TYPES,
   VALID_SEASONS,
   VALID_DIFFICULTY,
+  RUN_REGEX,
   RADIUS_MIN,
   RADIUS_MAX,
   ID_REGEX,
