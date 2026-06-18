@@ -1,0 +1,372 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+<title>Chase Life — Geofence Field Test</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Black+Han+Sans&family=Barlow+Condensed:wght@400;500;600;700&family=Barlow:wght@400;500;600&display=swap" rel="stylesheet">
+<style>
+  :root{
+    --night:#0a1018; --slate:#141d2b; --rim:#26344a; --coral:#ff6a3d;
+    --snow:#eef4fb; --ice:#8fb6d4; --fog:#5b7088; --hazard:#ff2f4e; --go:#38e0a6; --amber:#ffc24d;
+    --disp:'Black Han Sans',sans-serif; --cond:'Barlow Condensed',sans-serif; --body:'Barlow',sans-serif;
+  }
+  *{box-sizing:border-box;}
+  html,body{margin:0;min-height:100%;}
+  body{background:radial-gradient(120% 80% at 50% 0%,#11203a,#06090f 60%); color:var(--snow); font-family:var(--body); -webkit-font-smoothing:antialiased; padding:14px 14px 30px; max-width:520px; margin:0 auto;}
+  .brand{font-family:var(--cond); font-weight:700; letter-spacing:.12em; text-transform:uppercase; font-size:13px; color:var(--ice); margin-bottom:10px;}
+  .brand b{color:var(--coral);}
+
+  .startwrap{text-align:center; padding:30px 10px;}
+  .start{font-family:var(--cond); font-weight:700; font-size:16px; letter-spacing:.1em; text-transform:uppercase; background:var(--coral); color:#1a0a04; border:none; border-radius:12px; padding:16px 28px; cursor:pointer;}
+  .startnote{font-family:var(--cond); font-size:12px; color:var(--fog); line-height:1.6; margin-top:14px; letter-spacing:.04em;}
+
+  .phase{display:flex; align-items:center; gap:12px; padding:14px 16px; border-radius:14px; border:1px solid var(--rim); background:var(--slate); margin-bottom:12px;}
+  .phase .dot{width:16px;height:16px;border-radius:50%;flex:none;background:var(--fog);}
+  .phase .big{font-family:var(--disp); font-weight:400; font-size:26px; line-height:1;}
+  .phase .sub{font-family:var(--cond); font-size:12px; letter-spacing:.1em; text-transform:uppercase; color:var(--ice);}
+  .p-outside .dot{background:var(--fog);} .p-dwelling .dot{background:var(--amber);box-shadow:0 0 12px var(--amber);}
+  .p-active .dot{background:var(--go);box-shadow:0 0 12px var(--go);} .p-leaving .dot{background:var(--coral);box-shadow:0 0 12px var(--coral);}
+  .dwellbar{height:6px;border-radius:3px;background:var(--rim);overflow:hidden;margin:-6px 0 12px;}
+  .dwellbar i{display:block;height:100%;width:0%;background:var(--amber);transition:width .15s linear;}
+
+  .pbar{display:flex;align-items:center;justify-content:space-between;gap:10px;padding:9px 13px;border-radius:11px;border:1px solid var(--rim);margin-bottom:12px;background:var(--slate);}
+  .pbar.scan{border-color:rgba(143,182,212,.45);} .pbar.track{border-color:rgba(255,106,61,.45);}
+  .ptier{font-family:var(--cond);font-weight:700;font-size:13px;letter-spacing:.08em;text-transform:uppercase;}
+  .ptier.track{color:var(--coral);} .ptier.scan{color:var(--ice);}
+  .pinfo{font-family:var(--cond);font-size:12px;color:var(--fog);letter-spacing:.03em;text-align:right;}
+
+  .grid3{display:grid;grid-template-columns:1fr 1fr 1fr;gap:8px;margin-bottom:12px;}
+  .cell{background:var(--slate);border:1px solid var(--rim);border-radius:11px;padding:10px 11px;text-align:center;}
+  .cell .k{font-family:var(--cond);font-size:10px;letter-spacing:.12em;text-transform:uppercase;color:var(--fog);}
+  .cell .v{font-family:var(--disp);font-weight:400;font-size:26px;line-height:1.05;}
+  .cell .u{font-family:var(--cond);font-size:11px;color:var(--ice);}
+  .acc-good{color:var(--go);} .acc-ok{color:var(--amber);} .acc-bad{color:var(--hazard);}
+
+  .banner{display:none;align-items:center;gap:10px;border-radius:12px;padding:12px 14px;margin-bottom:12px;font-family:var(--cond);font-weight:600;letter-spacing:.04em;}
+  .banner.on{display:flex;}
+  .banner.enter{background:rgba(56,224,166,.14);border:1px solid rgba(56,224,166,.5);color:#bff3df;}
+  .banner.warn{background:rgba(255,47,78,.12);border:1px solid rgba(255,47,78,.5);color:#ffd2d8;}
+
+  table{width:100%;border-collapse:collapse;font-family:var(--cond);font-size:13px;margin-bottom:6px;}
+  th{text-align:left;color:var(--fog);font-weight:600;letter-spacing:.06em;text-transform:uppercase;font-size:10px;padding:5px 6px;border-bottom:1px solid var(--rim);}
+  td{padding:6px;border-bottom:1px solid rgba(38,52,74,.4);color:var(--fog);}
+  tr.in td{color:var(--snow);} tr.act td{color:var(--go);font-weight:600;}
+  .flag{color:var(--hazard);font-size:11px;}
+
+  .sectit{font-family:var(--cond);font-size:11px;letter-spacing:.16em;text-transform:uppercase;color:var(--fog);margin:16px 0 8px;display:flex;justify-content:space-between;align-items:center;}
+  .copy{font-family:var(--cond);font-size:11px;letter-spacing:.06em;text-transform:uppercase;color:var(--coral);background:none;border:1px solid var(--rim);border-radius:7px;padding:5px 9px;cursor:pointer;}
+  .log{font-family:var(--cond);font-size:12px;line-height:1.7;color:var(--ice);max-height:200px;overflow-y:auto;}
+  .log .t{color:var(--fog);} .log .enter{color:var(--go);} .log .exit{color:var(--coral);} .log .switch{color:var(--amber);}
+
+  .row{display:flex;align-items:center;justify-content:space-between;gap:10px;margin-bottom:9px;}
+  .row label{font-family:var(--cond);font-size:13px;color:var(--ice);flex:1;}
+  .row .val{font-family:var(--cond);font-weight:600;font-size:13px;min-width:50px;text-align:right;}
+  input[type=range]{width:120px;accent-color:var(--coral);}
+  .toggles{display:flex;gap:8px;flex-wrap:wrap;}
+  .tg{font-family:var(--cond);font-size:12px;letter-spacing:.06em;text-transform:uppercase;padding:8px 11px;border-radius:999px;border:1px solid var(--rim);color:var(--ice);cursor:pointer;user-select:none;}
+  .tg.on{border-color:var(--coral);color:var(--snow);background:rgba(255,106,61,.1);}
+  .err{color:var(--hazard);font-family:var(--cond);font-size:13px;margin-bottom:10px;}
+  .hidden{display:none;}
+</style>
+</head>
+<body>
+<div class="brand">CHASE<b>·</b>LIFE — Geofence Field Test</div>
+
+<div class="startwrap" id="startwrap">
+  <button class="start" id="startBtn">Start field test</button>
+  <div class="startnote">Walk CPR Ridge with the phone. It will speak each chute as you enter it.<br>Needs location permission. Must be opened over <b>https</b> (not a local file).</div>
+</div>
+
+<div id="app" class="hidden">
+  <div class="err hidden" id="err"></div>
+  <div class="banner enter" id="banner"></div>
+
+  <div class="phase p-outside" id="phase">
+    <span class="dot"></span>
+    <div><div class="big" id="phaseName">Searching…</div><div class="sub" id="phaseSub">waiting for GPS</div></div>
+  </div>
+  <div class="dwellbar"><i id="dwellFill"></i></div>
+
+  <div class="pbar track" id="pbar"><span class="ptier track" id="ptier">⚡ HIGH RATE</span><span class="pinfo" id="pinfo">alt – · zone –</span></div>
+
+  <div class="grid3">
+    <div class="cell"><div class="k">GPS accuracy</div><div class="v" id="acc">–</div><div class="u">±metres</div></div>
+    <div class="cell"><div class="k">Reveals</div><div class="v" id="revealCount">0</div><div class="u" id="fixCount">0 fixes</div></div>
+    <div class="cell"><div class="k">Acc range</div><div class="v" id="accRange" style="font-size:18px;line-height:1.5">–</div><div class="u">best / worst</div></div>
+  </div>
+
+  <table><thead><tr><th>Run</th><th>Dist</th><th>In</th><th>Member</th></tr></thead><tbody id="ztbody"></tbody></table>
+
+  <div class="sectit"><span>Tuning</span></div>
+  <div class="row"><label>Exit buffer (hysteresis)</label><span class="val" id="bufVal">20 m</span></div>
+  <div class="row"><input type="range" id="buf" min="0" max="40" step="1" value="20"></div>
+  <div class="row"><label>Dwell before reveal</label><span class="val" id="dwVal">3.0 s</span></div>
+  <div class="row"><input type="range" id="dw" min="0" max="8" step="0.5" value="3"></div>
+  <div class="row"><label>Accuracy cap (ignore worse)</label><span class="val" id="accCapVal">40 m</span></div>
+  <div class="row"><input type="range" id="accCap" min="10" max="80" step="1" value="40"></div>
+  <div class="toggles">
+    <span class="tg on" id="tgHys">Hysteresis</span>
+    <span class="tg on" id="tgDwell">Dwell</span>
+    <span class="tg on" id="tgVoice">Voice</span>
+    <span class="tg on" id="tgPower">Power saver</span>
+    <span class="tg" id="tgElev">Elev gate</span>
+  </div>
+
+  <div class="sectit"><span>Event log</span><button class="copy" id="copyLog">Copy</button></div>
+  <div class="log" id="log"><div class="t">— start walking —</div></div>
+</div>
+
+<script>
+/* ============================================================
+   GEOFENCE ENGINE  (production module — drop into the skier app)
+   Feed it GPS fixes; it emits enter / exit / switch / tick.
+   ============================================================ */
+function distM(aLat,aLon,bLat,bLon){
+  const R=6371000, toR=Math.PI/180;
+  const dLat=(bLat-aLat)*toR, dLon=(bLon-aLon)*toR;
+  const la1=aLat*toR, la2=bLat*toR;
+  const h=Math.sin(dLat/2)**2 + Math.cos(la1)*Math.cos(la2)*Math.sin(dLon/2)**2;
+  return 2*R*Math.asin(Math.min(1,Math.sqrt(h)));
+}
+
+const Geofencer = {
+  cfg:{ buffer:20, dwellMs:3000, accCap:40, switchMargin:0.15, hysteresis:true, dwell:true },
+  zones:[],
+  on:{ enter(){}, exit(){}, switch(){}, tick(){} },
+  S:{ phase:'outside', active:null, dwellZone:null, dwellStart:0, leaveStart:0, switchZone:null, switchStart:0 },
+  byId(id){ return this.zones.find(z=>z.id===id); },
+  enterR(z){ return z.radiusMeters; },
+  exitR(z){ return z.radiusMeters + (this.cfg.hysteresis ? this.cfg.buffer : 0); },
+  member(z,d){ const r=this.enterR(z); return Math.max(0,(r-d)/r); },
+
+  process(fix){                      // fix = {lat, lon, accuracy, ts}
+    const now=fix.ts, S=this.S;
+    const cands=this.zones.map(z=>({ z, d:distM(fix.lat,fix.lon,z.topLatLon[0],z.topLatLon[1]) }));
+    const lowAcc = fix.accuracy > this.cfg.accCap;
+    const snap={ fix, lowAcc, cands, phase:S.phase, active:S.active, dwellRemain:0 };
+    if(lowAcc){ this.on.tick(snap); return; }   // accuracy gate: hold, change nothing
+
+    // deepest-membership candidate among the "in" set (active uses exit radius)
+    let best=null, bestF=-1;
+    for(const x of cands){
+      const isAct = S.active===x.z.id;
+      const r = isAct ? this.exitR(x.z) : this.enterR(x.z);
+      if(x.d<=r){ const f=this.member(x.z,x.d); if(f>bestF){ bestF=f; best=x.z; } }
+    }
+    const dwellMs = this.cfg.dwell ? this.cfg.dwellMs : 0;
+
+    if(S.active){
+      const act=cands.find(x=>x.z.id===S.active);
+      const stillIn = act && act.d <= this.exitR(act.z);
+      if(!stillIn){
+        if(S.phase!=='leaving'){ S.phase='leaving'; S.leaveStart=now; }
+        if(now-S.leaveStart >= dwellMs*0.5){ const z=this.byId(S.active); S.active=null; S.phase='outside'; this.on.exit(z); }
+      } else {
+        S.phase='active'; S.leaveStart=0;
+        if(best && best.id!==S.active){
+          const af=this.member(act.z,act.d);
+          if(bestF-af > this.cfg.switchMargin){
+            if(S.switchZone!==best.id){ S.switchZone=best.id; S.switchStart=now; }
+            if(now-S.switchStart >= dwellMs){ S.active=best.id; this.on.switch(best); S.switchZone=null; }
+          } else S.switchZone=null;
+        } else S.switchZone=null;
+      }
+    } else {
+      if(best){
+        if(S.dwellZone!==best.id){ S.dwellZone=best.id; S.dwellStart=now; }
+        S.phase='dwelling'; snap.dwellRemain=Math.max(0, dwellMs-(now-S.dwellStart));
+        if(now-S.dwellStart >= dwellMs){ S.active=best.id; S.phase='active'; this.on.enter(best); S.dwellZone=null; }
+      } else { S.phase='outside'; S.dwellZone=null; }
+    }
+    snap.phase=S.phase; snap.active=S.active;
+    this.on.tick(snap);
+  }
+};
+
+/* ============================================================
+   FIELD-TEST WIRING  (GPS + HUD + voice)
+   ============================================================ */
+const SAMPLE=[
+  { id:'heli-pad',name:'Heli Pad',runNumber:'12',difficulty:'black',noFallZone:false,topLatLon:[51.27502,-117.07945],radiusMeters:30 },
+  { id:'tunnel',name:'Tunnel Vision',runNumber:'7',difficulty:'double-black',noFallZone:true,topLatLon:[51.27512,-117.07995],radiusMeters:35 },
+  { id:'think-twice',name:'Think Twice',runNumber:'9',difficulty:'black',noFallZone:false,topLatLon:[51.27465,-117.08120],radiusMeters:28 },
+];
+const API_URL=(location.protocol==='https:'||location.protocol==='http:')?'/api/pois':'https://chase-life.pages.dev/api/pois';
+
+let revealCount=0, fixCount=0, accMin=Infinity, accMax=0, watchId=null, wakeLock=null;
+const logLines=[];
+const synth = ('speechSynthesis' in window) ? window.speechSynthesis : null;
+let voiceOn=true;
+
+function speak(t){ if(!synth||!voiceOn) return; synth.cancel(); const u=new SpeechSynthesisUtterance(t); u.rate=1.0; synth.speak(u); }
+function clock(){ const d=new Date(); return d.toTimeString().slice(0,8); }
+function esc(x){return String(x).replace(/[&<>]/g,m=>({'&':'&amp;','<':'&lt;','>':'&gt;'}[m]));}
+
+function addLog(type,z,fix){
+  const line=`${clock()}  ${type}  Run ${z.runNumber} ${z.name}  @ ${fix.lat.toFixed(6)},${fix.lon.toFixed(6)}  ±${Math.round(fix.accuracy)}m`;
+  logLines.unshift(line);
+  document.getElementById('log').innerHTML = logLines.slice(0,40).map(l=>{
+    const parts=l.split('  '); const ty=parts[1]?parts[1].toLowerCase():'';
+    return `<div><span class="t">${esc(parts[0])}</span> <span class="${ty}">${esc(parts[1]||'')}</span> ${esc(parts.slice(2).join(' · '))}</div>`;
+  }).join('');
+}
+function banner(cls,text){ const b=document.getElementById('banner'); b.className='banner '+cls+' on'; b.textContent=text; clearTimeout(banner._t); banner._t=setTimeout(()=>b.classList.remove('on'),4000); }
+
+Geofencer.on.enter = z => {
+  revealCount++; document.getElementById('revealCount').textContent=revealCount;
+  const haz = z.difficulty==='double-black' ? ' Double black. Unmarked hazards.' : (z.noFallZone?' No-fall zone.':'');
+  speak(`Entered run ${z.runNumber}, ${z.name}.${haz}`);
+  if(navigator.vibrate) navigator.vibrate(z.difficulty==='double-black'?[120,60,120]:120);
+  banner('enter','⛷ ENTERED Run '+z.runNumber+' · '+z.name);
+  addLog('ENTER', z, lastFix);
+};
+Geofencer.on.exit = z => { speak(`Left ${z.name}.`); banner('enter','← Left Run '+z.runNumber); addLog('EXIT', z, lastFix); };
+Geofencer.on.switch = z => { revealCount++; document.getElementById('revealCount').textContent=revealCount; speak(`Now run ${z.runNumber}, ${z.name}.`); banner('enter','↻ Now Run '+z.runNumber+' · '+z.name); addLog('SWITCH', z, lastFix); };
+
+let lastFix={lat:0,lon:0,accuracy:0};
+Geofencer.on.tick = snap => {
+  // accuracy cell
+  const a=Math.round(snap.fix.accuracy);
+  const accEl=document.getElementById('acc');
+  accEl.textContent=a; accEl.className='v '+(a<=15?'acc-good':a<=30?'acc-ok':'acc-bad');
+  document.getElementById('fixCount').textContent=fixCount+' fixes';
+  document.getElementById('accRange').textContent=(accMin===Infinity?'–':Math.round(accMin))+' / '+Math.round(accMax);
+  // low-acc indicator via phase sub
+  const ph=document.getElementById('phase'); ph.className='phase p-'+snap.phase;
+  document.getElementById('phaseName').textContent=
+    snap.lowAcc?'Holding': {outside:'Outside',dwelling:'Dwelling',active:'Active',leaving:'Leaving'}[snap.phase];
+  const actZ=Geofencer.byId(snap.active);
+  document.getElementById('phaseSub').textContent=
+    snap.lowAcc?('GPS ±'+a+'m too poor'):(actZ?('Run '+actZ.runNumber+' · '+actZ.name):(snap.phase==='dwelling'?'acquiring…':'no zone'));
+  const dwMs=Geofencer.cfg.dwell?Geofencer.cfg.dwellMs:0;
+  document.getElementById('dwellFill').style.width=(snap.phase==='dwelling'&&dwMs>0)?(100*(1-snap.dwellRemain/dwMs)).toFixed(0)+'%':(snap.phase==='active'?'100%':'0%');
+  // zone table
+  document.getElementById('ztbody').innerHTML = snap.cands.slice().sort((p,q)=>p.d-q.d).map(x=>{
+    const r=(snap.active===x.z.id)?Geofencer.exitR(x.z):Geofencer.enterR(x.z);
+    const inside=x.d<=r, f=Math.round(Geofencer.member(x.z,x.d)*100);
+    const cls=(snap.active===x.z.id)?'act':(inside?'in':'');
+    const tooSmall = x.z.radiusMeters < snap.fix.accuracy ? ' <span class="flag">r&lt;acc</span>' : '';
+    return `<tr class="${cls}"><td>${x.z.runNumber}${tooSmall}</td><td>${x.d.toFixed(0)} m</td><td>${inside?'yes':'—'}</td><td>${f}%</td></tr>`;
+  }).join('');
+};
+
+/* ----- GPS ----- */
+function onFix(pos){
+  fixCount++;
+  const c=pos.coords;
+  lastFix={ lat:c.latitude, lon:c.longitude, accuracy:c.accuracy, ts:performance.now() };
+  accMin=Math.min(accMin,c.accuracy); accMax=Math.max(accMax,c.accuracy);
+  Geofencer.process(lastFix);
+  showAlt(c);
+}
+function onGeoErr(e){
+  const el=document.getElementById('err'); el.classList.remove('hidden');
+  el.textContent = e.code===1 ? 'Location permission denied — enable it in Settings and reload.'
+                 : e.code===2 ? 'Position unavailable — no GPS fix yet. Stay outdoors with a clear sky.'
+                 : 'GPS timed out — searching…';
+}
+
+/* ============================================================
+   POWER MANAGER  — two tiers, gated by proximity to the chute cluster.
+   SCAN (low power, coarse, ~25s) only asks "am I near the chutes yet?"
+   TRACK (high-rate GPS + geofencer) runs only inside the armed zone.
+   ============================================================ */
+const Power = {
+  cfg:{ enabled:true, armMarginM:600, disarmExtraM:300, dwellMs:15000, useElevation:false, elevMinM:2000, scanMs:25000 },
+  tier:'track', armCenter:null, armRadius:0, watchId:null, scanTimer:null, outStart:0, lastArmD:null,
+  computeZone(){
+    const zs=Geofencer.zones; if(!zs.length){ this.armCenter=null; return; }
+    const cLat=zs.reduce((s,z)=>s+z.topLatLon[0],0)/zs.length;
+    const cLon=zs.reduce((s,z)=>s+z.topLatLon[1],0)/zs.length;
+    let maxD=0; zs.forEach(z=>{ maxD=Math.max(maxD, distM(cLat,cLon,z.topLatLon[0],z.topLatLon[1])); });
+    this.armCenter=[cLat,cLon]; this.armRadius=maxD+this.cfg.armMarginM;
+  },
+  begin(){ this.computeZone(); if(!this.cfg.enabled){ this.toTrack(); } else { this.toScan(); } },
+  armed(lat,lon,alt){
+    if(!this.armCenter) return {in:true,d:0};
+    const d=distM(lat,lon,this.armCenter[0],this.armCenter[1]);
+    let ok = d<=this.armRadius;
+    if(this.cfg.useElevation && alt!=null) ok = ok && (alt>=this.cfg.elevMinM);
+    return {in:ok,d};
+  },
+  toScan(){
+    this.tier='scan'; this.stopWatch();
+    const poll=()=>navigator.geolocation.getCurrentPosition(p=>this.onScan(p), onGeoErr, {enableHighAccuracy:false, maximumAge:this.cfg.scanMs, timeout:20000});
+    poll(); this.stopScan(); this.scanTimer=setInterval(poll, this.cfg.scanMs);
+    updateTier();
+  },
+  onScan(p){ const c=p.coords, z=this.armed(c.latitude,c.longitude,c.altitude); this.lastArmD=z.d; showAlt(c); updateTier(); if(z.in) this.toTrack(); },
+  toTrack(){
+    if(this.tier==='track' && this.watchId!=null) return;
+    this.tier='track'; this.stopScan(); this.outStart=0;
+    this.watchId=navigator.geolocation.watchPosition(p=>this.onTrack(p), onGeoErr, {enableHighAccuracy:true, maximumAge:1000, timeout:20000});
+    keepAwake(); updateTier();
+  },
+  onTrack(p){
+    onFix(p);
+    if(!this.cfg.enabled || !this.armCenter) return;
+    const c=p.coords, d=distM(c.latitude,c.longitude,this.armCenter[0],this.armCenter[1]); this.lastArmD=d;
+    if(d > this.armRadius+this.cfg.disarmExtraM){ if(!this.outStart) this.outStart=performance.now(); if(performance.now()-this.outStart>=this.cfg.dwellMs) this.toScan(); }
+    else this.outStart=0;
+  },
+  setEnabled(on){ this.cfg.enabled=on; if(on) this.toScan(); else this.toTrack(); },
+  stopWatch(){ if(this.watchId!=null){ navigator.geolocation.clearWatch(this.watchId); this.watchId=null; } },
+  stopScan(){ if(this.scanTimer){ clearInterval(this.scanTimer); this.scanTimer=null; } }
+};
+
+async function keepAwake(){ try{ if('wakeLock' in navigator) wakeLock=await navigator.wakeLock.request('screen'); }catch(e){} }
+function showAlt(c){
+  const altTxt = (c.altitude==null) ? 'alt n/a'
+    : 'alt '+Math.round(c.altitude)+'m'+(c.altitudeAccuracy!=null?' ±'+Math.round(c.altitudeAccuracy):'');
+  let armTxt='';
+  if(Power.armCenter && Power.lastArmD!=null){ armTxt=' · '+(Power.lastArmD<=Power.armRadius?'in chute zone':(Math.round(Power.lastArmD-Power.armRadius)+'m out')); }
+  document.getElementById('pinfo').textContent = altTxt+armTxt;
+}
+function updateTier(){
+  const t=document.getElementById('ptier'), bar=document.getElementById('pbar');
+  if(!Power.cfg.enabled){ t.textContent='⚡ HIGH RATE (saver off)'; t.className='ptier track'; bar.className='pbar track'; return; }
+  if(Power.tier==='track'){ t.textContent='⚡ HIGH RATE'; t.className='ptier track'; bar.className='pbar track'; }
+  else { t.textContent='🌙 POWER SAVER · scanning'; t.className='ptier scan'; bar.className='pbar scan'; }
+}
+
+async function start(){
+  document.getElementById('startwrap').classList.add('hidden');
+  document.getElementById('app').classList.remove('hidden');
+  speak('Field test started.');                 // unlocks iOS speech via the tap
+  await keepAwake();
+  if(!('geolocation' in navigator)){ onGeoErr({code:2}); return; }
+  Power.begin();
+}
+document.addEventListener('visibilitychange',async()=>{ if(document.visibilityState==='visible' && 'wakeLock' in navigator){ try{ wakeLock=await navigator.wakeLock.request('screen'); }catch(e){} } });
+
+/* ----- controls ----- */
+document.getElementById('buf').addEventListener('input',e=>{ Geofencer.cfg.buffer=+e.target.value; document.getElementById('bufVal').textContent=e.target.value+' m'; });
+document.getElementById('dw').addEventListener('input',e=>{ Geofencer.cfg.dwellMs=(+e.target.value)*1000; document.getElementById('dwVal').textContent=(+e.target.value).toFixed(1)+' s'; });
+document.getElementById('accCap').addEventListener('input',e=>{ Geofencer.cfg.accCap=+e.target.value; document.getElementById('accCapVal').textContent=e.target.value+' m'; });
+function tg(id,fn){ const el=document.getElementById(id); el.addEventListener('click',()=>{ el.classList.toggle('on'); fn(el.classList.contains('on')); }); }
+tg('tgHys',v=>Geofencer.cfg.hysteresis=v);
+tg('tgDwell',v=>Geofencer.cfg.dwell=v);
+tg('tgVoice',v=>{ voiceOn=v; });
+tg('tgPower',v=>Power.setEnabled(v));
+tg('tgElev',v=>{ Power.cfg.useElevation=v; });
+document.getElementById('copyLog').addEventListener('click',()=>{
+  const txt='Chase Life geofence field log\n'+logLines.join('\n');
+  if(navigator.clipboard) navigator.clipboard.writeText(txt).then(()=>banner('enter','Log copied'));
+});
+document.getElementById('startBtn').addEventListener('click',start);
+
+/* ----- load chutes ----- */
+(async function(){
+  try{
+    const r=await fetch(API_URL,{cache:'no-store'}); if(!r.ok) throw 0;
+    const d=await r.json();
+    const pois=(d.pois||[]).filter(p=>Array.isArray(p.topLatLon)&&typeof p.radiusMeters==='number');
+    Geofencer.zones = pois.length ? pois.map(p=>({ id:p.id,name:p.name||'Chute',runNumber:p.runNumber||'?',difficulty:p.difficulty||'black',noFallZone:!!p.noFallZone,topLatLon:p.topLatLon,radiusMeters:p.radiusMeters })) : SAMPLE.map(c=>({...c}));
+  }catch(e){ Geofencer.zones=SAMPLE.map(c=>({...c})); }
+})();
+</script>
+</body>
+</html>
