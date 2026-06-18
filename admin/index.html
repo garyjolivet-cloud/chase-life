@@ -1845,7 +1845,8 @@ function resetFormUI() {
   document.getElementById('section-conditions').style.display = 'none';
   document.getElementById('section-narrative').style.display = 'none';
   document.getElementById('section-images').style.display = 'none';
-  document.getElementById('section-audio').style.display = 'none';
+  document.getElementById('section-audio').style.display = '';
+  if (typeof updateAudioUI === 'function') updateAudioUI();
 
   // Reset image previews
   ['main', 'profile', 'runout'].forEach(slot => {
@@ -2373,7 +2374,6 @@ function validatePOIClient(poi) {
       errors.push('Enter a run number (digits or a short code like 12 or 12A).');
     }
   } else if (poi.type === 'narrative-poi') {
-    if (!poi.audioUrl) errors.push('Audio URL is required for narrative-poi.');
     if (!VALID_SEASONS.includes(poi.season)) errors.push('Pick a season.');
   }
 
@@ -2417,7 +2417,6 @@ function formFieldErrors() {
     if (!f.runNumber) bad['f-runNumber'] = 'Required';
     else if (!RUN_REGEX.test(f.runNumber)) bad['f-runNumber'] = 'Digits or short code';
   } else if (f.type === 'narrative-poi') {
-    if (!f.audioUrl) bad['f-audioUrl'] = 'Required';
     if (!VALID_SEASONS.includes(f.season)) bad['f-season'] = 'Pick a season';
   }
   return bad;
@@ -2633,7 +2632,7 @@ function updateAudioUI(){
   const input = document.getElementById('f-audioUrl');
   if (input && document.activeElement !== input) input.value = url;
   const badge = document.getElementById('audio-badge');
-  if (badge) badge.textContent = (state.form.type === 'narrative-poi') ? 'required' : 'optional';
+  if (badge) badge.textContent = 'optional';
   const cur = document.getElementById('audio-current');
   const player = document.getElementById('audio-player');
   if (cur && player){
