@@ -106,9 +106,6 @@ function validateWinterChuteFields(poi, errors) {
 }
 
 function validateNarrativePoiFields(poi, errors) {
-  if (!isNonEmptyString(poi.audioUrl)) {
-    errors.push('audioUrl is required for narrative-poi (v1 is audio-first)');
-  }
   if (!VALID_SEASONS.includes(poi.season)) {
     errors.push(`season must be one of: ${VALID_SEASONS.join(', ')} (got "${poi.season}")`);
   }
