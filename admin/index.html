@@ -1196,14 +1196,27 @@ input, textarea, select { font-family: inherit; }
         </div>
       </div>
 
+      <!-- Section: Audio (optional, all types) -->
+      <div class="form-section" id="section-audio" style="display:none;">
+        <div class="form-section-title">Audio <span class="badge" id="audio-badge">optional</span></div>
+        <div class="field">
+          <label>Audio file</label>
+          <input type="file" id="f-audioFile" accept="audio/mpeg,audio/mp4,audio/aac,audio/wav,audio/ogg,audio/webm,.mp3,.m4a,.aac,.wav,.ogg,.weba">
+          <div class="hint" id="audio-hint">Plays when a user enters this fence. Optional for every type. Save the POI first, then upload (max 20 MB).</div>
+        </div>
+        <div class="field">
+          <label for="f-audioUrl">Audio URL</label>
+          <input type="text" id="f-audioUrl" placeholder="Uploaded file URL appears here — or paste one">
+        </div>
+        <div class="field" id="audio-current" style="display:none;">
+          <audio id="audio-player" controls preload="none" style="width:100%;"></audio>
+          <button type="button" id="audio-remove" style="margin-top:8px;background:none;border:1px solid var(--rim);color:var(--ice);border-radius:8px;padding:7px 12px;cursor:pointer;font-family:inherit;">Remove audio</button>
+        </div>
+      </div>
+
       <!-- Section: Narrative (narrative-poi only) -->
       <div class="form-section" id="section-narrative" style="display:none;">
         <div class="form-section-title">Narrative <span class="badge">narrative-poi only</span></div>
-        <div class="field">
-          <label for="f-audioUrl">Audio URL <span class="req">*</span></label>
-          <input type="text" id="f-audioUrl" placeholder="https://chase-life-media.r2.dev/audio/...">
-          <div class="hint">Required. Audio plays when skier enters this POI's zone.</div>
-        </div>
         <div class="field">
           <label for="f-narrativeText">Narrative text (optional)</label>
           <textarea id="f-narrativeText" placeholder="Used as closed-caption alongside audio."></textarea>
@@ -1832,6 +1845,7 @@ function resetFormUI() {
   document.getElementById('section-conditions').style.display = 'none';
   document.getElementById('section-narrative').style.display = 'none';
   document.getElementById('section-images').style.display = 'none';
+  document.getElementById('section-audio').style.display = 'none';
 
   // Reset image previews
   ['main', 'profile', 'runout'].forEach(slot => {
@@ -1892,6 +1906,7 @@ function openEditForm(poiId) {
     state.form.topLon = poi.topLatLon[1];
   }
   state.form.radiusMeters = poi.radiusMeters ?? '';
+  state.form.audioUrl = poi.audioUrl || '';
 
   if (poi.type === 'winter-chute') {
     if (Array.isArray(poi.bottomLatLon)) {
@@ -1978,6 +1993,8 @@ function openEditForm(poiId) {
 
   // Show Images section in edit mode and pre-populate previews
   document.getElementById('section-images').style.display = '';
+  document.getElementById('section-audio').style.display = '';
+  updateAudioUI();
   const existingImages = (poi.images && typeof poi.images === 'object') ? poi.images : {};
   state.form.images = {
     main:    existingImages.main    || '',
@@ -2120,6 +2137,7 @@ document.getElementById('type-selector').addEventListener('click', (e) => {
   document.getElementById('section-geometry').style.display   = state.form.type === 'winter-chute' ? '' : 'none';
   document.getElementById('section-conditions').style.display = state.form.type === 'winter-chute' ? '' : 'none';
   document.getElementById('section-narrative').style.display  = state.form.type === 'narrative-poi' ? '' : 'none';
+  if (typeof updateAudioUI === 'function') updateAudioUI();
   updateFormStatus();
 });
 
@@ -2249,6 +2267,7 @@ function buildPOIFromForm() {
   if (f.region)         poi.region = f.region.trim();
   if (f.geoDescription) poi.geoDescription = f.geoDescription.trim();
   if (f.notes)          poi.notes = f.notes.trim();
+  if (f.audioUrl)       poi.audioUrl = f.audioUrl.trim();
 
   if (f.type === 'winter-chute') {
     if (f.runNumber) poi.runNumber = f.runNumber.trim();
@@ -2271,7 +2290,6 @@ function buildPOIFromForm() {
     poi.noFallZone = !!f.noFallZone;
     if (f.difficulty) poi.difficulty = f.difficulty;
   } else if (f.type === 'narrative-poi') {
-    if (f.audioUrl)      poi.audioUrl = f.audioUrl.trim();
     if (f.narrativeText) poi.narrativeText = f.narrativeText.trim();
     poi.season = f.season || 'any';
     poi.narrativeAudioAutoPlay = !!f.narrativeAudioAutoPlay;
@@ -2602,6 +2620,95 @@ async function persistImagesNow() {
   const idx = state.pois.findIndex(p => p.id === state.editingId);
   if (idx >= 0) state.pois[idx] = updated;
 }
+
+// ─── Audio (optional, all types) ──────────────────────────
+function setAudioHint(text, kind){
+  const h = document.getElementById('audio-hint');
+  if (!h) return;
+  h.textContent = text;
+  h.className = 'hint' + (kind ? ' ' + kind : '');
+}
+function updateAudioUI(){
+  const url = state.form.audioUrl || '';
+  const input = document.getElementById('f-audioUrl');
+  if (input && document.activeElement !== input) input.value = url;
+  const badge = document.getElementById('audio-badge');
+  if (badge) badge.textContent = (state.form.type === 'narrative-poi') ? 'required' : 'optional';
+  const cur = document.getElementById('audio-current');
+  const player = document.getElementById('audio-player');
+  if (cur && player){
+    if (url){ player.src = url; cur.style.display = ''; }
+    else { player.removeAttribute('src'); cur.style.display = 'none'; }
+  }
+}
+async function persistAudioNow(){
+  if (!state.editingId) return;
+  const poi = state.pois.find(p => p.id === state.editingId);
+  if (!poi) return;
+  const updated = { ...poi };
+  if (state.form.audioUrl) updated.audioUrl = state.form.audioUrl;
+  else delete updated.audioUrl;
+  const token = getStoredToken();
+  const resp = await fetch(`${API_BASE}/pois`, {
+    method: 'POST',
+    headers: { 'Authorization': `Bearer ${token}`, 'Content-Type': 'application/json' },
+    body: JSON.stringify(updated),
+  });
+  if (!resp.ok){ const d = await resp.json().catch(() => ({})); throw new Error(d.error || `HTTP ${resp.status}`); }
+  const idx = state.pois.findIndex(p => p.id === state.editingId);
+  if (idx >= 0) state.pois[idx] = updated;
+}
+async function uploadAudioFile(file){
+  if (!state.editingId){ toast('Save the POI first, then upload audio.', 'err'); return; }
+  if (!file) return;
+  const okType = /^audio\//.test(file.type) || /\.(mp3|m4a|aac|wav|ogg|weba|webm)$/i.test(file.name);
+  if (!okType){ setAudioHint(`Unsupported type: ${file.type || file.name}`, 'err'); return; }
+  if (file.size > 20 * 1024 * 1024){ setAudioHint(`Too large: ${(file.size / 1024 / 1024).toFixed(1)} MB (max 20)`, 'err'); return; }
+  setAudioHint(`Uploading ${file.name}…`, '');
+  const fd = new FormData();
+  fd.append('file', file);
+  fd.append('poiId', state.editingId);
+  fd.append('field', 'audio');
+  try {
+    const token = getStoredToken();
+    const resp = await fetch(`${API_BASE}/upload`, {
+      method: 'POST',
+      headers: { 'Authorization': `Bearer ${token}` },
+      body: fd,
+    });
+    const data = await resp.json().catch(() => ({}));
+    if (resp.status === 401){ toast('Session expired. Please sign in again.', 'err'); logout(); return; }
+    if (!resp.ok) throw new Error(data.error || `HTTP ${resp.status}`);
+    state.form.audioUrl = data.url;
+    updateAudioUI();
+    setAudioHint(`Uploaded · ${(file.size / 1024).toFixed(0)} KB`, 'ok');
+    await persistAudioNow();
+    toast('Audio uploaded', 'ok');
+  } catch (err){
+    setAudioHint('Upload failed: ' + err.message, 'err');
+    toast('Upload failed: ' + err.message, 'err');
+  }
+}
+(function wireAudio(){
+  const fileInput = document.getElementById('f-audioFile');
+  if (fileInput) fileInput.addEventListener('change', (e) => {
+    const f = e.target.files[0];
+    e.target.value = '';
+    uploadAudioFile(f);
+  });
+  const urlInput = document.getElementById('f-audioUrl');
+  if (urlInput) urlInput.addEventListener('change', () => updateAudioUI());
+  const removeBtn = document.getElementById('audio-remove');
+  if (removeBtn) removeBtn.addEventListener('click', () => {
+    if (!confirm('Remove this audio? The file stays in storage but won\'t be linked to this POI.')) return;
+    state.form.audioUrl = '';
+    updateAudioUI();
+    if (state.editingId){
+      persistAudioNow().then(() => toast('Audio removed', 'ok'))
+                       .catch(err => toast('Remove failed: ' + err.message, 'err'));
+    }
+  });
+})();
 
 // Wire image tile buttons (event delegation)
 document.querySelector('#section-images').addEventListener('click', (e) => {
