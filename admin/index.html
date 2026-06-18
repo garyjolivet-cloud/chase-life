@@ -828,6 +828,19 @@ input, textarea, select { font-family: inherit; }
 .map-panel-title { font-family: 'Black Han Sans', sans-serif; font-size: 1.05rem; color: var(--snow); }
 .map-panel-close { background: none; border: none; color: var(--muted); font-size: 1.5rem; line-height: 1; cursor: pointer; padding: 0 4px; }
 .map-panel-close:hover { color: var(--text); }
+.settings-row { display: flex; align-items: center; justify-content: space-between; gap: 16px; }
+.settings-text { flex: 1; min-width: 0; }
+.settings-title { font-family: 'Black Han Sans', sans-serif; font-size: 1rem; color: var(--snow); margin-bottom: 4px; }
+.settings-desc { font-size: 0.8rem; color: var(--muted); line-height: 1.5; }
+.settings-status { font-size: 0.78rem; color: var(--muted); margin-top: 10px; }
+.settings-status.on { color: #38e0a6; }
+.switch { position: relative; display: inline-block; flex: none; cursor: pointer; }
+.switch input { position: absolute; opacity: 0; width: 0; height: 0; }
+.switch-track { display: block; width: 50px; height: 28px; border-radius: 999px; background: #2a3650; transition: background .2s; position: relative; }
+.switch-thumb { position: absolute; top: 3px; left: 3px; width: 22px; height: 22px; border-radius: 50%; background: #eef4fb; transition: transform .2s; }
+.switch input:checked + .switch-track { background: #ff6a3d; }
+.switch input:checked + .switch-track .switch-thumb { transform: translateX(22px); }
+.switch input:disabled + .switch-track { opacity: .5; cursor: default; }
 .mp-row { display: flex; justify-content: space-between; gap: 10px; padding: 5px 0; border-bottom: 1px solid var(--rim); font-size: 0.85rem; }
 .mp-k { color: var(--muted); text-transform: uppercase; font-size: 0.7rem; letter-spacing: .04em; }
 .mp-v { color: var(--text); text-align: right; font-variant-numeric: tabular-nums; }
@@ -955,6 +968,19 @@ input, textarea, select { font-family: inherit; }
         <div class="status-row"><span class="status-label">POI catalog</span><span id="status-catalog" class="status-value">checking...</span></div>
         <div class="status-row"><span class="status-label">Admin auth</span><span id="status-auth" class="status-value">checking...</span></div>
         <div class="status-row"><span class="status-label">Schema version</span><span id="status-schema" class="status-value">—</span></div>
+      </div>
+      <div class="status-card" style="margin-top:16px;">
+        <div class="settings-row">
+          <div class="settings-text">
+            <div class="settings-title">Full GPS mode</div>
+            <div class="settings-desc">Disables the battery saver so every phone tracks GPS at full rate everywhere. Turn on for summer / field work when energy isn't a concern. Off = the two-tier power saver runs (winter default).</div>
+          </div>
+          <label class="switch" title="Full GPS mode">
+            <input type="checkbox" id="full-gps-toggle" disabled>
+            <span class="switch-track"><span class="switch-thumb"></span></span>
+          </label>
+        </div>
+        <div class="settings-status" id="full-gps-status">checking…</div>
       </div>
       <div class="placeholder-note">
         <strong>Steps 8 + 9 + 10 + 11 + 12 complete.</strong> Back office can fully
@@ -1520,7 +1546,58 @@ async function runStatusChecks() {
     $sAuth.textContent = 'invalid'; $sAuth.className = 'status-value err';
     setTimeout(() => logout(), 1500);
   }
+  loadConfig();
 }
+
+// ─── Mountain settings: Full GPS mode ─────────────────────
+
+async function loadConfig() {
+  const tgl = document.getElementById('full-gps-toggle');
+  const st  = document.getElementById('full-gps-status');
+  if (!tgl) return;
+  tgl.disabled = true;
+  if (st) { st.textContent = 'checking…'; st.className = 'settings-status'; }
+  try {
+    const resp = await fetch(`${API_BASE}/config`, { cache: 'no-store' });
+    if (!resp.ok) throw new Error(`HTTP ${resp.status}`);
+    const cfg = await resp.json();
+    const on = !!cfg.fullGpsMode;
+    tgl.checked = on;
+    tgl.disabled = false;
+    if (st) {
+      st.textContent = on
+        ? 'Full GPS mode ON — battery saver disabled on all phones.'
+        : 'Power saver active (winter default).';
+      st.className = 'settings-status' + (on ? ' on' : '');
+    }
+  } catch (err) {
+    tgl.disabled = true;
+    if (st) { st.textContent = 'Could not load settings.'; st.className = 'settings-status'; }
+  }
+}
+
+async function setFullGps(on) {
+  const tgl = document.getElementById('full-gps-toggle');
+  const token = getStoredToken();
+  if (tgl) tgl.disabled = true;
+  try {
+    const resp = await fetch(`${API_BASE}/config`, {
+      method: 'POST',
+      headers: { 'Authorization': `Bearer ${token}`, 'Content-Type': 'application/json' },
+      body: JSON.stringify({ fullGpsMode: on }),
+    });
+    if (!resp.ok) throw new Error(`HTTP ${resp.status}`);
+    toast(on ? 'Full GPS mode ON' : 'Power saver restored', 'ok');
+    await loadConfig();
+  } catch (err) {
+    toast('Failed to update setting', 'err');
+    if (tgl) { tgl.checked = !on; tgl.disabled = false; }
+  }
+}
+
+document.addEventListener('change', (e) => {
+  if (e.target && e.target.id === 'full-gps-toggle') setFullGps(e.target.checked);
+});
 
 // ─── POI list: load + render ──────────────────────────────
 
