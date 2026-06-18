@@ -27,20 +27,36 @@
 
 // ─── Constants ──────────────────────────────────────────────
 
-const MAX_BYTES = 5 * 1024 * 1024;  // 5 MB
+const MAX_BYTES = 5 * 1024 * 1024;        // 5 MB  (images)
+const MAX_BYTES_AUDIO = 20 * 1024 * 1024; // 20 MB (audio narration)
 const ALLOWED_TYPES = new Set([
   'image/jpeg',
   'image/png',
   'image/webp',
+  'audio/mpeg',
+  'audio/mp4',
+  'audio/aac',
+  'audio/wav',
+  'audio/x-wav',
+  'audio/ogg',
+  'audio/webm',
 ]);
 const EXT_BY_TYPE = {
   'image/jpeg': 'jpg',
   'image/png':  'png',
   'image/webp': 'webp',
+  'audio/mpeg': 'mp3',
+  'audio/mp4':  'm4a',
+  'audio/aac':  'aac',
+  'audio/wav':  'wav',
+  'audio/x-wav':'wav',
+  'audio/ogg':  'ogg',
+  'audio/webm': 'weba',
 };
 const ALLOWED_FIELDS = new Set([
   'main', 'entrance', 'exit', 'runout', 'profile',
   'extra1', 'extra2', 'extra3',
+  'audio',
 ]);
 
 // CORS: open for now; future Step 8 may tighten to back office origin only.
@@ -185,11 +201,12 @@ export async function onRequestPost({ request, env }) {
     );
   }
 
-  // Validate file size.
-  if (file.size > MAX_BYTES) {
+  // Validate file size (audio allowed larger than images).
+  const sizeCap = contentType.startsWith('audio/') ? MAX_BYTES_AUDIO : MAX_BYTES;
+  if (file.size > sizeCap) {
     const mb = (file.size / 1024 / 1024).toFixed(2);
     return errorResponse(
-      `File too large (${mb} MB) — max is ${MAX_BYTES / 1024 / 1024} MB`,
+      `File too large (${mb} MB) — max is ${sizeCap / 1024 / 1024} MB`,
       413
     );
   }
