@@ -77,7 +77,7 @@
 
 <div class="startwrap" id="startwrap">
   <button class="start" id="startBtn">Start field test</button>
-  <div class="startnote">Walk CPR Ridge with the phone. It will speak each chute as you enter it.<br>Needs location permission. Must be opened over <b>https</b> (not a local file).</div>
+  <div class="startnote">Walk CPR Ridge with the phone. It will speak each chute as you enter it.<br>Needs location permission. Must be opened over <b>https</b> (not a local file).<br><b>Keep this screen open</b> — lower brightness rather than locking; detection pauses if the phone locks or you switch apps, and resumes when you reopen it.</div>
 </div>
 
 <div id="app" class="hidden">
@@ -138,6 +138,7 @@ const Geofencer = {
   on:{ enter(){}, exit(){}, switch(){}, tick(){} },
   S:{ phase:'outside', active:null, dwellZone:null, dwellStart:0, leaveStart:0, switchZone:null, switchStart:0 },
   byId(id){ return this.zones.find(z=>z.id===id); },
+  resync(){ const S=this.S, now=performance.now(); S.dwellStart=now; S.leaveStart=now; S.switchStart=now; S.dwellZone=null; S.switchZone=null; },
   enterR(z){ return z.radiusMeters; },
   exitR(z){ return z.radiusMeters + (this.cfg.hysteresis ? this.cfg.buffer : 0); },
   member(z,d){ const r=this.enterR(z); return Math.max(0,(r-d)/r); },
@@ -259,6 +260,9 @@ function onFix(pos){
   const c=pos.coords;
   lastFix={ lat:c.latitude, lon:c.longitude, accuracy:c.accuracy, ts:performance.now() };
   accMin=Math.min(accMin,c.accuracy); accMax=Math.max(accMax,c.accuracy);
+  // ignore a stale OS-cached fix (e.g. the first one handed back after the screen wakes)
+  const ageMs = pos.timestamp ? (Date.now()-pos.timestamp) : 0;
+  if(ageMs > 8000){ showAlt(c); return; }
   Geofencer.process(lastFix);
   showAlt(c);
 }
@@ -314,10 +318,18 @@ const Power = {
   },
   setEnabled(on){ this.cfg.enabled=on; if(on) this.toScan(); else this.toTrack(); },
   stopWatch(){ if(this.watchId!=null){ navigator.geolocation.clearWatch(this.watchId); this.watchId=null; } },
+  resync(){ this.outStart=0; },
   stopScan(){ if(this.scanTimer){ clearInterval(this.scanTimer); this.scanTimer=null; } }
 };
 
-async function keepAwake(){ try{ if('wakeLock' in navigator) wakeLock=await navigator.wakeLock.request('screen'); }catch(e){} }
+async function keepAwake(){
+  try{
+    if(!('wakeLock' in navigator)) return;
+    if(wakeLock){ try{ await wakeLock.release(); }catch(e){} wakeLock=null; }
+    wakeLock=await navigator.wakeLock.request('screen');
+    wakeLock.addEventListener('release', ()=>{ wakeLock=null; });
+  }catch(e){ wakeLock=null; }
+}
 function showAlt(c){
   const altTxt = (c.altitude==null) ? 'alt n/a'
     : 'alt '+Math.round(c.altitude)+'m'+(c.altitudeAccuracy!=null?' ±'+Math.round(c.altitudeAccuracy):'');
@@ -340,7 +352,14 @@ async function start(){
   if(!('geolocation' in navigator)){ onGeoErr({code:2}); return; }
   Power.begin();
 }
-document.addEventListener('visibilitychange',async()=>{ if(document.visibilityState==='visible' && 'wakeLock' in navigator){ try{ wakeLock=await navigator.wakeLock.request('screen'); }catch(e){} } });
+let hiddenSince=0;
+document.addEventListener('visibilitychange', async ()=>{
+  if(document.hidden){ hiddenSince=performance.now(); return; }   // JS suspends while hidden; the wake lock auto-releases
+  // resumed: re-grab the screen lock and re-sync, so the clock gap can't auto-fire a stale enter/exit
+  await keepAwake();
+  Geofencer.resync(); Power.resync();
+  if(hiddenSince){ banner('enter','▶ Resumed — re-syncing GPS'); hiddenSince=0; }
+});
 
 /* ----- controls ----- */
 document.getElementById('buf').addEventListener('input',e=>{ Geofencer.cfg.buffer=+e.target.value; document.getElementById('bufVal').textContent=e.target.value+' m'; });
