@@ -1,0 +1,835 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+<title>Chase Life — Zone Reveal (demo)</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Black+Han+Sans&family=Barlow+Condensed:wght@400;500;600;700&family=Barlow:wght@400;500;600&display=swap" rel="stylesheet">
+<style>
+  :root{
+    --night:#0a1018; --slate:#141d2b; --slate-2:#1b2738;
+    --rim:#26344a; --coral:#ff6a3d; --coral-dim:#b8492a;
+    --snow:#eef4fb; --ice:#8fb6d4; --fog:#5b7088;
+    --hazard:#ff2f4e; --go:#38e0a6; --amber:#ffc24d;
+    --disp:'Black Han Sans',sans-serif; --cond:'Barlow Condensed',sans-serif; --body:'Barlow',sans-serif;
+  }
+  *{box-sizing:border-box;}
+  html,body{margin:0;height:100%;}
+  body{
+    background:#05080d; color:var(--snow); font-family:var(--body);
+    display:flex; align-items:center; justify-content:center; min-height:100vh;
+    padding:18px; -webkit-font-smoothing:antialiased;
+  }
+  /* phone frame */
+  .phone{
+    position:relative; width:100%; max-width:430px; height:min(880px,94vh);
+    background:radial-gradient(120% 80% at 50% -10%, #11203a 0%, var(--night) 46%, #060a12 100%);
+    border:1px solid var(--rim); border-radius:34px; overflow:hidden;
+    box-shadow:0 30px 80px rgba(0,0,0,.6), inset 0 1px 0 rgba(255,255,255,.04);
+    display:flex; flex-direction:column;
+  }
+  /* top status strip */
+  .status{
+    display:flex; align-items:center; justify-content:space-between;
+    padding:16px 20px 8px; font-family:var(--cond); letter-spacing:.12em;
+    font-size:12px; text-transform:uppercase; color:var(--fog);
+  }
+  .status .brand{color:var(--snow); font-weight:700;}
+  .status .brand b{color:var(--coral);}
+  .gps{display:flex; align-items:center; gap:6px;}
+  .gps .dot{width:7px;height:7px;border-radius:50%;background:var(--go);box-shadow:0 0 8px var(--go);}
+
+  /* stage */
+  .stage{position:relative; flex:1; overflow:hidden;}
+  .screen{position:absolute; inset:0; display:flex; flex-direction:column;}
+
+  /* ---------- STANDBY ---------- */
+  #standby{align-items:center; justify-content:flex-start; gap:0; padding:8px 0 0; overflow-y:auto;}
+  .dial{position:relative; width:210px; height:210px; display:grid; place-items:center;}
+  .dial .ring{position:absolute; inset:0; border-radius:50%; border:1px solid var(--rim);}
+  .dial .ring.r2{inset:26px; border-color:#1c2538;}
+  .dial .pulse{position:absolute; inset:0; border-radius:50%; border:1.5px solid var(--coral);
+    opacity:0; animation:breathe 3.4s ease-out infinite;}
+  @keyframes breathe{0%{transform:scale(.62);opacity:.55;}70%{opacity:0;}100%{transform:scale(1);opacity:0;}}
+  .dial .core{width:96px;height:96px;border-radius:50%;
+    background:radial-gradient(circle at 50% 38%, #1c2c46, #0c1422);
+    border:1px solid var(--rim); display:grid; place-items:center;}
+  .dial .core span{font-family:var(--cond); font-size:12px; letter-spacing:.16em; color:var(--ice); text-transform:uppercase;}
+  .standby-copy{text-align:center; max-width:280px;}
+  .standby-copy h1{font-family:var(--disp); font-weight:400; font-size:26px; margin:0 0 8px; letter-spacing:.01em;}
+  .standby-copy p{margin:0; color:var(--ice); font-size:15px; line-height:1.5;}
+
+  /* ---------- REVEAL ---------- */
+  .hero{position:relative; height:230px; flex:none; overflow:hidden;}
+  .hero svg{position:absolute; inset:0; width:100%; height:100%;}
+  .hero .grad{position:absolute; inset:0; background:linear-gradient(180deg, rgba(8,14,24,0) 38%, rgba(8,14,24,.65) 78%, var(--night) 100%);}
+  .hero .eyebrow{position:absolute; left:20px; top:18px; font-family:var(--cond);
+    font-size:12px; letter-spacing:.2em; text-transform:uppercase; color:var(--snow);
+    background:rgba(10,16,24,.5); backdrop-filter:blur(4px); padding:5px 10px; border-radius:6px;
+    border:1px solid rgba(255,255,255,.12);}
+  .hero .typetag{position:absolute; right:20px; top:18px; font-family:var(--cond);
+    font-size:12px; letter-spacing:.16em; text-transform:uppercase; padding:5px 10px; border-radius:6px;
+    border:1px solid currentColor;}
+  .hero .name{position:absolute; left:20px; right:20px; bottom:14px;
+    font-family:var(--disp); font-weight:400; font-size:48px; line-height:.96; letter-spacing:.01em;}
+  .hero .name small{display:block; font-family:var(--cond); font-weight:600; font-size:13px;
+    letter-spacing:.14em; text-transform:uppercase; color:var(--ice); margin-bottom:7px;}
+
+  .body{flex:1; overflow-y:auto; padding:18px 20px 96px;}
+
+  /* hazard banner */
+  .hazard{display:flex; align-items:center; gap:11px; background:rgba(255,47,78,.12);
+    border:1px solid rgba(255,47,78,.5); color:#ffd2d8; border-radius:11px;
+    padding:12px 14px; margin-bottom:16px;}
+  .hazard svg{flex:none;}
+  .hazard b{font-family:var(--cond); letter-spacing:.08em; text-transform:uppercase; font-size:14px; color:#ff8a98;}
+  .hazard span{font-size:13.5px; color:#ffd2d8;}
+
+  /* difficulty badge */
+  .diffbadge{display:flex; align-items:center; gap:14px; margin-bottom:14px; padding:12px 14px;
+    background:var(--slate); border:1px solid var(--rim); border-radius:12px;}
+  .diffbadge .dsym{font-size:30px; line-height:1; letter-spacing:-3px;}
+  .diffbadge .dlabel{font-family:var(--disp); font-weight:400; font-size:25px; line-height:1;}
+  .diffbadge .dsub{font-family:var(--cond); font-size:12px; letter-spacing:.1em; text-transform:uppercase; color:var(--fog); margin-top:3px;}
+  /* conditions call */
+  .callbox{margin-bottom:16px; padding:13px 16px 14px 18px; border-radius:12px;
+    background:var(--slate); border:1px solid var(--rim); border-left:4px solid var(--call,var(--ice));}
+  .calltop{font-family:var(--cond); font-size:11px; letter-spacing:.18em; text-transform:uppercase; color:var(--fog); margin-bottom:3px;}
+  .callword{font-family:var(--disp); font-weight:400; font-size:34px; line-height:.95;}
+  .callreason{font-family:var(--body); font-size:14px; color:var(--ice); margin-top:5px;}
+  /* snow-load meter */
+  .loadrow{display:flex; align-items:center; gap:12px; margin-bottom:18px;}
+  .loadlabel{font-family:var(--cond); font-size:11px; letter-spacing:.14em; text-transform:uppercase; color:var(--fog); min-width:72px;}
+  .loadmeter{display:flex; gap:5px; flex:1;}
+  .loadmeter i{height:8px; flex:1; border-radius:3px; background:var(--rim);}
+  .loadval{font-family:var(--cond); font-weight:700; font-size:14px; letter-spacing:.06em; text-transform:uppercase; min-width:60px; text-align:right;}
+
+  /* stat grid */
+  .stats{display:grid; grid-template-columns:1fr 1fr; gap:1px; background:var(--rim);
+    border:1px solid var(--rim); border-radius:12px; overflow:hidden;}
+  .stats .cell{background:var(--slate); padding:13px 14px;}
+  .stats .k{font-family:var(--cond); font-size:11px; letter-spacing:.14em; text-transform:uppercase; color:var(--fog); margin-bottom:4px;}
+  .stats .v{font-family:var(--cond); font-weight:600; font-size:20px; color:var(--snow);}
+  .stats .v small{font-size:13px; color:var(--ice); font-weight:500;}
+
+  /* info chips (closes early / patrol / photos) */
+  .chips{display:flex; flex-wrap:wrap; gap:8px; margin-top:16px;}
+  .chip{font-family:var(--cond); font-size:12.5px; letter-spacing:.06em; text-transform:uppercase;
+    padding:7px 11px; border-radius:999px; border:1px solid var(--rim); color:var(--ice);
+    display:flex; align-items:center; gap:7px;}
+  .chip.patrol{border-color:rgba(56,224,166,.4); color:var(--go);}
+  .chip.time{border-color:rgba(255,194,77,.4); color:var(--amber);}
+
+  .photos{margin-top:18px;}
+  .photos .lbl{font-family:var(--cond); font-size:11px; letter-spacing:.16em; text-transform:uppercase; color:var(--fog); margin-bottom:8px;}
+  .shots{display:grid; grid-template-columns:repeat(3,1fr); gap:8px;}
+  .shot{aspect-ratio:4/3; border-radius:9px; border:1px solid var(--rim); overflow:hidden; position:relative;}
+  .shot svg{position:absolute; inset:0; width:100%; height:100%;}
+  .shot span{position:absolute; left:6px; bottom:5px; font-family:var(--cond); font-size:10px;
+    letter-spacing:.1em; text-transform:uppercase; color:var(--snow); background:rgba(8,14,24,.55);
+    padding:2px 6px; border-radius:4px;}
+
+  /* narrative */
+  .narr-text{font-size:16px; line-height:1.62; color:var(--snow); margin:4px 0 0;}
+  #audiodock{margin-top:4px;}
+  .audiocard{background:var(--slate); border:1px solid var(--rim); border-radius:14px; padding:13px 15px; display:flex; flex-direction:column; gap:9px;}
+  .audiocard .lab{font-family:'Barlow Condensed',sans-serif; font-size:11px; letter-spacing:.13em; text-transform:uppercase; color:var(--ice);}
+  .audiocard audio{width:100%; height:38px;}
+  .audiocard.none{color:var(--fog); font-family:'Barlow Condensed',sans-serif; letter-spacing:.04em; font-size:13px; align-items:flex-start;}
+  #zonepick{background:var(--slate); color:var(--snow); border:1px solid var(--rim); border-radius:9px; padding:8px 10px; font-family:'Barlow Condensed',sans-serif; font-size:13px; max-width:160px;}
+  .player{display:flex; align-items:center; gap:14px; background:var(--slate); border:1px solid var(--rim);
+    border-radius:14px; padding:14px 16px; margin-bottom:18px;}
+  .play{width:48px;height:48px;border-radius:50%;border:none;cursor:pointer;flex:none;
+    background:var(--coral); color:#1a0a04; display:grid; place-items:center;}
+  .play:hover{filter:brightness(1.08);}
+  .player .meta{flex:1; min-width:0;}
+  .player .meta .t{font-family:var(--cond); font-weight:600; letter-spacing:.05em; font-size:15px; text-transform:uppercase;}
+  .track{height:4px; background:var(--rim); border-radius:2px; margin:8px 0 5px; overflow:hidden;}
+  .track i{display:block; height:100%; width:0%; background:var(--coral); transition:width .25s linear;}
+  .time{font-family:var(--cond); font-size:12px; color:var(--fog); letter-spacing:.06em;}
+  .eq{display:flex; align-items:flex-end; gap:3px; height:18px;}
+  .eq i{width:3px; background:var(--ice); border-radius:2px; height:5px;}
+  .player.playing .eq i{animation:eq .9s ease-in-out infinite;}
+  .player.playing .eq i:nth-child(2){animation-delay:.15s}.player.playing .eq i:nth-child(3){animation-delay:.3s}
+  .player.playing .eq i:nth-child(4){animation-delay:.45s}.player.playing .eq i:nth-child(5){animation-delay:.6s}
+  @keyframes eq{0%,100%{height:5px}50%{height:17px}}
+
+  /* general body */
+  .vista{font-size:16px; line-height:1.6; color:var(--snow);}
+
+  /* zone-entry radial pulse overlay */
+  .scan{position:absolute; left:50%; top:120px; width:10px; height:10px; border-radius:50%;
+    border:2px solid var(--coral); transform:translate(-50%,-50%); pointer-events:none; opacity:0; z-index:5;}
+  .scan.go{animation:scan .9s cubic-bezier(.2,.7,.3,1) forwards;}
+  @keyframes scan{0%{opacity:.9;width:10px;height:10px;}100%{opacity:0;width:620px;height:620px;border-color:rgba(255,106,61,0);}}
+  .reveal-anim{animation:rise .5s cubic-bezier(.2,.7,.3,1) both;}
+  @keyframes rise{from{opacity:0; transform:translateY(16px);}to{opacity:1; transform:none;}}
+
+  /* bottom bar */
+  .dock{position:absolute; left:0; right:0; bottom:0; padding:14px 18px 18px;
+    background:linear-gradient(180deg, rgba(10,16,24,0), rgba(8,12,18,.92) 40%);
+    display:flex; align-items:center; gap:12px; z-index:6;}
+  .toggle{display:flex; align-items:center; gap:8px; font-family:var(--cond); font-size:12px;
+    letter-spacing:.1em; text-transform:uppercase; color:var(--ice); cursor:pointer; user-select:none;}
+  .toggle .sw{width:38px;height:22px;border-radius:11px;background:var(--coral);position:relative;transition:.2s;}
+  .toggle .sw::after{content:'';position:absolute;top:2px;left:18px;width:18px;height:18px;border-radius:50%;background:#1a0a04;transition:.2s;}
+  .toggle.off .sw{background:var(--rim);}
+  .toggle.off .sw::after{left:2px;background:var(--fog);}
+  .next{margin-left:auto; display:flex; align-items:center; gap:9px; cursor:pointer;
+    background:var(--coral); color:#1a0a04; border:none; border-radius:11px; padding:12px 16px;
+    font-family:var(--cond); font-weight:700; font-size:14px; letter-spacing:.08em; text-transform:uppercase;}
+  .next:hover{filter:brightness(1.08);}
+  .zonecount{font-family:var(--cond); font-size:12px; letter-spacing:.12em; text-transform:uppercase; color:var(--fog);}
+
+  .hint{position:absolute; left:0; right:0; bottom:70px; text-align:center; z-index:6;
+    font-family:var(--cond); font-size:12px; letter-spacing:.1em; text-transform:uppercase; color:var(--fog); pointer-events:none;}
+
+  /* reveals-off veil */
+  .veil{position:absolute; inset:0; background:rgba(6,10,16,.86); backdrop-filter:blur(3px);
+    display:none; flex-direction:column; align-items:center; justify-content:center; gap:10px; z-index:4; text-align:center; padding:30px;}
+  .phone.paused .veil{display:flex;}
+  .veil h2{font-family:var(--disp); font-weight:400; font-size:22px; margin:0; color:var(--ice);}
+  .veil p{margin:0; color:var(--fog); font-size:14px;}
+
+  *:focus-visible{outline:2px solid var(--coral); outline-offset:2px;}
+  @media (prefers-reduced-motion:reduce){
+    .scan, .dial .pulse, .reveal-anim, .player.playing .eq i{animation:none!important;}
+    .reveal-anim{opacity:1; transform:none;}
+  }
+  .status-right{display:flex; align-items:center; gap:12px;}
+  .voicechip{display:none; align-items:center; gap:5px; color:var(--coral); font-family:var(--cond); font-size:11px; letter-spacing:.12em;}
+  .voicechip.on{display:flex;}
+  .voicechip .vbars{display:flex; align-items:flex-end; gap:2px; height:13px;}
+  .voicechip .vbars i{width:3px; background:var(--coral); border-radius:2px; height:4px; animation:eq .9s ease-in-out infinite;}
+  .voicechip .vbars i:nth-child(2){animation-delay:.18s} .voicechip .vbars i:nth-child(3){animation-delay:.36s}
+  .repeat{position:absolute; right:16px; bottom:86px; z-index:6; display:none; align-items:center; gap:8px;
+    background:rgba(10,16,24,.7); backdrop-filter:blur(5px); border:1px solid rgba(255,255,255,.16);
+    color:var(--snow); border-radius:999px; padding:10px 15px; cursor:pointer;
+    font-family:var(--cond); font-weight:700; font-size:12px; letter-spacing:.12em; text-transform:uppercase;}
+  .repeat:hover{filter:brightness(1.12);}
+  /* ---------- Chase Life home / conditions ---------- */
+  .home{display:flex; flex-direction:column; align-items:center; gap:16px; padding:14px 22px 0; width:100%;}
+  .wxhead{display:flex; justify-content:space-between; align-items:center; width:100%;
+    font-family:var(--cond); font-size:12px; letter-spacing:.12em; text-transform:uppercase;}
+  .wxhead .loc{color:var(--snow); font-weight:700;}
+  .wxhead .when{color:var(--fog);}
+  .homedial{position:relative; width:262px; height:262px; cursor:pointer; flex:none;}
+  .homedial svg{position:absolute; inset:0; width:100%; height:100%;}
+  .homedial .center{position:absolute; inset:0; display:flex; flex-direction:column; align-items:center; justify-content:center; gap:1px; pointer-events:none;}
+  .homedial .big{font-family:var(--disp); font-weight:400; font-size:62px; line-height:.8; color:var(--snow);}
+  .homedial .unit{font-family:var(--cond); font-size:12px; letter-spacing:.18em; text-transform:uppercase; color:var(--ice); margin-top:4px;}
+  .homedial .stat{font-family:var(--cond); font-size:11px; letter-spacing:.14em; text-transform:uppercase; color:var(--fog); margin-top:5px;}
+  .wxrow{display:grid; grid-template-columns:repeat(4,1fr); gap:1px; background:var(--rim);
+    border:1px solid var(--rim); border-radius:12px; overflow:hidden; width:100%;}
+  .wxrow > div{background:var(--slate); padding:11px 6px; text-align:center; display:flex; flex-direction:column; gap:3px;}
+  .wxrow .k{font-family:var(--cond); font-size:10px; letter-spacing:.1em; text-transform:uppercase; color:var(--fog);}
+  .wxrow .v{font-family:var(--cond); font-weight:600; font-size:18px; color:var(--snow);}
+  .wxrow .v small{font-size:11px; color:var(--ice); font-weight:500;}
+  .wxcall{margin:2px 0 0; text-align:center; font-size:14.5px; line-height:1.5; color:var(--ice); max-width:300px;}
+  .tap-hint{font-family:var(--cond); font-size:11px; letter-spacing:.1em; text-transform:uppercase; color:var(--fog); padding-bottom:8px;}
+  .compass-btn{font-family:var(--cond); font-weight:700; font-size:12px; letter-spacing:.12em; text-transform:uppercase;
+    background:transparent; color:var(--coral); border:1px solid var(--coral); border-radius:999px; padding:9px 16px; cursor:pointer;}
+  .compass-btn:hover{background:rgba(255,106,61,.12);}
+  .compass-note{font-family:var(--cond); font-size:11px; letter-spacing:.06em; color:var(--ice); text-align:center; min-height:14px;}
+  .daysim{display:flex; gap:8px; margin-top:2px;}
+  .simchip{font-family:var(--cond); font-size:11px; letter-spacing:.08em; text-transform:uppercase; color:var(--ice);
+    background:var(--slate); border:1px solid var(--rim); border-radius:999px; padding:7px 12px; cursor:pointer;}
+  .simchip:hover{border-color:var(--coral);}
+  .patrol-line{font-family:var(--cond); font-size:11px; letter-spacing:.12em; text-transform:uppercase; color:var(--go); text-align:center; margin-top:-4px;}
+</style>
+</head>
+<body>
+<div class="phone" id="phone">
+  <div class="status">
+    <div class="brand">CHASE<b>·</b>LIFE</div>
+    <div class="status-right">
+      <span class="voicechip" id="voicechip"><svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor"><path d="M5 9v6h4l5 5V4L9 9H5z"/></svg><span class="vbars"><i></i><i></i><i></i></span></span>
+      <div class="gps"><span class="dot"></span>GPS</div>
+    </div>
+  </div>
+
+  <div class="stage">
+    <div class="scan" id="scan"></div>
+
+    <!-- standby -->
+    <div class="screen" id="standby">
+      <div id="home"></div>
+    </div>
+
+    <!-- reveal -->
+    <div class="screen" id="reveal" style="display:none;">
+      <div class="hero" id="hero"></div>
+      <div class="body" id="body"></div>
+      <div id="audiodock"></div>
+    </div>
+
+    <div class="veil">
+      <h2>Reveals are off</h2>
+      <p>Flip the switch to let zones surface as you ski.</p>
+    </div>
+
+    <button class="repeat" id="repeat" aria-label="Repeat aloud">
+      <svg width="15" height="15" viewBox="0 0 24 24" fill="currentColor"><path d="M5 9v6h4l5 5V4L9 9H5z"/></svg>
+      Repeat aloud
+    </button>
+    <div class="hint" id="hint">Tab or tap to walk in — each zone speaks aloud</div>
+
+    <div class="dock">
+      <div class="toggle" id="toggle" role="button" tabindex="0" aria-label="Toggle reveals">
+        <span class="sw"></span><span id="togtext">Reveals on</span>
+      </div>
+      <select id="zonepick" aria-label="Jump to zone"></select>
+      <div class="zonecount" id="zonecount"></div>
+      <button class="next" id="next">Next zone
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none"><path d="M5 12h14M13 6l6 6-6 6" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"/></svg>
+      </button>
+    </div>
+  </div>
+</div>
+
+<script>
+/* ---------- test data: 4 zones, all three POI types ---------- */
+const SAMPLE = [
+  { type:'winter-chute', name:'Tunnel Vision', region:'CPR Ridge',
+    runNumber:'7', difficulty:'double-black', noFallZone:true, conditions:'dangerous', conditionsReason:'Icy, flat light, no-fall zone', snowLoad:'loaded',
+    pitch:'38–45°', drop:'260 m', dropSub:'2380 → 2120', width:'3–8 m', loads:'SSW', aspect:'NE-facing',
+    rope:true, closesEarly:'Closes 2:00 PM', patrol:true },
+  { type:'winter-chute', name:'Heli Pad', region:'CPR Ridge',
+    runNumber:'12', difficulty:'black', noFallZone:false, conditions:'good', conditionsReason:'', snowLoad:'filled',
+    pitch:'35–45°', drop:'71 m', dropSub:'2318 → 2247', width:'4–10 m', loads:'NE', aspect:'NW-facing',
+    rope:false, closesEarly:null, patrol:true },
+  { type:'narrative-poi', name:'The Whaleback', region:'Bowl rim',
+    season:'Winter', duration:'1:24',
+    text:'Patrol named this rolling spine for the way it surfaces out of a storm like a breaching whale. In a heavy year the whole back fills in and the line you’re standing on is gone by noon — so if it looks good, it is, and it won’t wait.' },
+  { type:'general', name:'Eagle’s Eye', region:'Summit', elev:'2450 m',
+    text:'The highest serviced point on the mountain. On a clear morning the Purcells stack up to the west, the Rockies to the east, and the Columbia Valley threads the gap between them.' },
+];
+
+/* ---------- test weather / mountain conditions ---------- */
+const WX = {
+  date:'Sat \u00b7 Jan 17', status:'Finalized 9:00 AM',
+  newSnow:18, newSnowMax:30, isRain:false,
+  temp:-8, wind:22, windDir:'SSW', windDeg:202,
+  base:184, sky:'Clearing',
+  visibility:'good', surface:'soft',
+  call:'Fresh SSW load \u2014 lee faces on CPR Ridge are prime today.'
+};
+
+/* ---------- live catalog + ranker (snow load + conditions) ---------- */
+const COMPASS_DEG = {N:0,NNE:22.5,NE:45,ENE:67.5,E:90,ESE:112.5,SE:135,SSE:157.5,S:180,SSW:202.5,SW:225,WSW:247.5,W:270,WNW:292.5,NW:315,NNW:337.5};
+let ZONES = SAMPLE.slice();
+let RAW = [];
+let dataNote = '';
+function cap(x){ x=String(x||''); return x.charAt(0).toUpperCase()+x.slice(1); }
+function bearingDeg(a,b){
+  const r=Math.PI/180, p1=a[0]*r, p2=b[0]*r, dl=(b[1]-a[1])*r;
+  const y=Math.sin(dl)*Math.cos(p2);
+  const x=Math.cos(p1)*Math.sin(p2)-Math.sin(p1)*Math.cos(p2)*Math.cos(dl);
+  return (Math.atan2(y,x)*180/Math.PI+360)%360;
+}
+function snowLoadFor(p,w){
+  const pref=COMPASS_DEG[p.stormDirPreference];
+  const align=(pref==null)?0:Math.cos((Math.abs(((w.windDeg-pref)%360+540)%360-180))*Math.PI/180);
+  const snowF=Math.max(0,Math.min(1,w.newSnow/25));
+  if(align<=-0.3) return 'scoured';
+  const load=0.6*snowF+0.4*((align+1)/2);
+  return load>=0.6?'loaded':load>=0.35?'filled':'thin';
+}
+function conditionsFor(p,snowLoad,w){
+  const icy=w.surface==='icy', firm=w.surface==='firm', poorVis=w.visibility==='poor', modVis=w.visibility==='moderate';
+  const reasons=[];
+  if(poorVis) reasons.push('flat light'); else if(modVis) reasons.push('soft light');
+  if(icy) reasons.push('icy'); else if(firm) reasons.push('firm');
+  if(snowLoad==='scoured') reasons.push('wind-scoured');
+  if(p.noFallZone) reasons.push('no-fall zone');
+  let level;
+  if(poorVis || (p.noFallZone && icy) || (icy && (snowLoad==='scoured'||snowLoad==='thin'))) level='dangerous';
+  else if(icy || snowLoad==='scoured' || modVis || (p.noFallZone && firm)) level='fair';
+  else if(firm || snowLoad==='thin') level='good';
+  else level=(snowLoad==='loaded'||snowLoad==='filled')?'prime':'good';
+  return {level, reason:(level==='dangerous'||level==='fair')?reasons.join(', '):''};
+}
+function poiToZone(p){
+  if(p.type!=='winter-chute'){
+    return { type:p.type, name:p.name||'POI', region:p.region||'', season:p.season||'Winter', duration:p.duration||'1:00',
+      text:p.narrative||p.description||p.text||'', elev:(isFinite(p.topElev_m)?p.topElev_m+' m':''),
+      audioUrl:p.audioUrl||'', autoplay:(p.narrativeAudioAutoPlay!==false) };
+  }
+  const top=p.topLatLon, bot=p.bottomLatLon;
+  const aspect=(Array.isArray(top)&&Array.isArray(bot))?compassName(bearingDeg(top,bot))+'-facing':'—';
+  const snowLoad=snowLoadFor(p,WX);
+  const cond=conditionsFor(p,snowLoad,WX);
+  const drop=(isFinite(p.topElev_m)&&isFinite(p.bottomElev_m))?(p.topElev_m-p.bottomElev_m):null;
+  return { type:'winter-chute', name:p.name||'Chute', region:p.region||'',
+    runNumber:p.runNumber||'', difficulty:p.difficulty||'black', noFallZone:!!p.noFallZone,
+    conditions:cond.level, conditionsReason:cond.reason, snowLoad,
+    pitch:(isFinite(p.slopeMin_deg)?`${p.slopeMin_deg}–${p.slopeMax_deg}°`:'—'),
+    drop:(drop!=null?`${drop} m`:'—'),
+    dropSub:(isFinite(p.topElev_m)?`${p.topElev_m} → ${p.bottomElev_m}`:''),
+    width:(isFinite(p.widthMin_m)?`${p.widthMin_m}–${p.widthMax_m} m`:'—'),
+    loads:p.stormDirPreference||'—', aspect,
+    rope:!!p.needsRoping, closesEarly:p.closesEarly?'Closes early':null, patrol:!!p.patrolControlled,
+    audioUrl:p.audioUrl||'' };
+}
+function rebuild(){ if(RAW.length) ZONES = RAW.map(poiToZone); }
+function refreshDaySim(){
+  const vb=document.getElementById('sim-vis'); if(vb) vb.textContent='Visibility: '+cap(WX.visibility);
+  const sb=document.getElementById('sim-surf'); if(sb) sb.textContent='Surface: '+cap(WX.surface);
+  if(idx>=0) render();
+}
+
+/* ---------- inline terrain art (no real photos in a prototype) ---------- */
+function heroArt(z){
+  const a = z.type==='winter-chute' ? '#2b3c57' : z.type==='narrative-poi' ? '#26384f' : '#2f4a63';
+  const tint = z.type==='winter-chute' ? '#ff6a3d' : z.type==='narrative-poi' ? '#8fb6d4' : '#eef4fb';
+  const couloir = z.type==='winter-chute'
+    ? `<path d="M205 40 L218 230 L246 230 L235 40 Z" fill="#0e1726"/>
+       <path d="M221 44 L231 226" stroke="${tint}" stroke-width="2.2" stroke-dasharray="6 5" opacity=".9"/>` : '';
+  return `<svg viewBox="0 0 430 230" preserveAspectRatio="xMidYMid slice" xmlns="http://www.w3.org/2000/svg">
+    <defs><linearGradient id="sky" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#16284a"/><stop offset="1" stop-color="#0c1626"/>
+    </linearGradient></defs>
+    <rect width="430" height="230" fill="url(#sky)"/>
+    <circle cx="340" cy="52" r="30" fill="#1d3358" opacity=".6"/>
+    <path d="M0 150 L70 96 L120 132 L180 70 L250 128 L320 78 L430 140 L430 230 L0 230 Z" fill="#16243b"/>
+    <path d="M0 178 L60 140 L130 176 L200 120 L270 168 L350 128 L430 170 L430 230 L0 230 Z" fill="#1b2c46"/>
+    <path d="M180 70 L168 110 L196 104 Z" fill="#dfeaf6" opacity=".85"/>
+    <path d="M250 128 L242 150 L262 146 Z" fill="#cdddef" opacity=".7"/>
+    ${couloir}
+  </svg>`;
+}
+function shotArt(seed){
+  const cols=['#22344f','#1c3150','#243a59','#2a3d59'];
+  const c=cols[seed%cols.length];
+  return `<svg viewBox="0 0 120 90" preserveAspectRatio="none" xmlns="http://www.w3.org/2000/svg">
+    <rect width="120" height="90" fill="${c}"/>
+    <path d="M0 64 L34 40 L60 58 L86 34 L120 60 L120 90 L0 90Z" fill="#11203a"/>
+    <path d="M86 34 L80 52 L96 49Z" fill="#dfeaf6" opacity=".7"/>
+  </svg>`;
+}
+
+/* ---------- rank gauge ---------- */
+function gauge(score){
+  const r=46, c=2*Math.PI*r, off=c*(1-score/100);
+  const col = score>=75 ? 'var(--go)' : score>=55 ? 'var(--coral)' : 'var(--fog)';
+  return `<div class="gauge">
+    <svg width="108" height="108" viewBox="0 0 108 108">
+      <circle cx="54" cy="54" r="${r}" fill="none" stroke="#22324a" stroke-width="9"/>
+      <circle cx="54" cy="54" r="${r}" fill="none" stroke="${col}" stroke-width="9" stroke-linecap="round"
+        stroke-dasharray="${c}" stroke-dashoffset="${off}"/>
+    </svg>
+    <div class="num"><b>${score}</b><em>Rank</em></div>
+  </div>`;
+}
+
+/* ---------- renderers ---------- */
+function esc(s){return String(s).replace(/[&<>]/g,m=>({'&':'&amp;','<':'&lt;','>':'&gt;'}[m]));}
+
+const DIFF = {
+  green:{sym:'●',label:'Green',sub:'Easiest',col:'#46c463'},
+  blue:{sym:'■',label:'Blue',sub:'Intermediate',col:'#4a90e2'},
+  black:{sym:'◆',label:'Black',sub:'Advanced',col:'#0c0f16',stroke:'#ffc24d',warn:true},
+  'double-black':{sym:'◆◆',label:'Double black',sub:'Expert — unmarked hazards',col:'#0c0f16',stroke:'#ffc24d',warn:true},
+};
+const COND = {
+  prime:{label:'Prime',col:'var(--go)',def:'Strong load, good visibility, soft surface.'},
+  good:{label:'Good',col:'var(--ice)',def:'Decent snow, nothing working against you.'},
+  fair:{label:'Fair',col:'var(--amber)',def:'Skiable, but compromised.'},
+  dangerous:{label:'Dangerous',col:'var(--hazard)',def:'Serious hazard present — reconsider.'},
+};
+const LOAD = {
+  scoured:{n:1,label:'Scoured',col:'var(--fog)'},
+  thin:{n:2,label:'Thin',col:'var(--ice)'},
+  filled:{n:3,label:'Filled',col:'var(--coral)'},
+  loaded:{n:4,label:'Loaded',col:'var(--coral)'},
+};
+
+function renderHero(z){
+  const tint = z.type==='winter-chute' ? 'var(--coral)' : z.type==='narrative-poi' ? 'var(--ice)' : 'var(--snow)';
+  const label = z.type==='winter-chute' ? 'Chute' : z.type==='narrative-poi' ? 'Story' : 'Lookout';
+  return `${heroArt(z)}<div class="grad"></div>
+    <div class="eyebrow">You've entered</div>
+    <div class="typetag" style="color:${tint}">${label}</div>
+    <div class="name"><small>${[z.runNumber?('Run '+esc(z.runNumber)):'', esc(z.region||'')].filter(Boolean).join(' \u00b7 ')}</small>${esc(z.name)}</div>`;
+}
+
+function renderChute(z){
+  const D = DIFF[z.difficulty] || DIFF.black;
+  const symStyle = D.stroke ? `color:${D.col};-webkit-text-stroke:1.5px ${D.stroke};text-stroke:1.5px ${D.stroke}` : `color:${D.col}`;
+  const subStyle = D.warn ? ' style="color:#ffc24d"' : '';
+  const badge = `<div class="diffbadge"><span class="dsym" style="${symStyle}">${D.sym}</span><div><div class="dlabel">${D.label}</div><div class="dsub"${subStyle}>${D.sub}</div></div></div>`;
+  const warnSvg = `<svg width="22" height="22" viewBox="0 0 24 24" fill="none"><path d="M12 3 2 21h20L12 3Z" stroke="#ff8a98" stroke-width="2" stroke-linejoin="round"/><path d="M12 10v5" stroke="#ff8a98" stroke-width="2.2" stroke-linecap="round"/><circle cx="12" cy="18" r="1.2" fill="#ff8a98"/></svg>`;
+  let disc = '';
+  if(z.difficulty==='double-black'){
+    disc += `<div class="hazard">${warnSvg}<div><b>Unmarked hazards</b><br><span>Cliffs, exposed rock, and tree wells may not be marked. Expert terrain — ski in control, and never alone.</span></div></div>`;
+  }
+  const C = COND[z.conditions] || COND.good;
+  const call = `<div class="callbox" style="--call:${C.col}">
+    <div class="calltop">Conditions today</div>
+    <div class="callword" style="color:${C.col}">${C.label}</div>
+    <div class="callreason">${esc(z.conditionsReason || C.def)}</div>
+  </div>`;
+  const L = LOAD[z.snowLoad] || LOAD.filled;
+  let bars=''; for(let i=1;i<=4;i++){ bars += `<i${i<=L.n?` style="background:${L.col}"`:''}></i>`; }
+  const load = `<div class="loadrow"><div class="loadlabel">Snow load</div><div class="loadmeter">${bars}</div><div class="loadval" style="color:${L.col}">${L.label}</div></div>`;
+  const chips = [
+    z.noFallZone ? `<div class="chip danger">⚠ No-fall zone</div>` : '',
+    z.closesEarly ? `<div class="chip time">◷ ${esc(z.closesEarly)}</div>` : '',
+    `<div class="chip">⌖ Loads on ${esc(z.loads)}</div>`,
+  ].join('');
+  return `${badge}${disc}${call}${load}
+    <div class="stats">
+      <div class="cell"><div class="k">Pitch</div><div class="v">${esc(z.pitch)}</div></div>
+      <div class="cell"><div class="k">Vertical drop</div><div class="v">${esc(z.drop)} <small>${esc(z.dropSub)}</small></div></div>
+      <div class="cell"><div class="k">Width</div><div class="v">${esc(z.width)}</div></div>
+      <div class="cell"><div class="k">Aspect</div><div class="v">${esc(z.aspect)}</div></div>
+    </div>
+    ${chips ? `<div class="chips">${chips}</div>`:''}
+    <div class="photos"><div class="lbl">Photos</div><div class="shots">
+      <div class="shot">${shotArt(1)}<span>Primary</span></div>
+      <div class="shot">${shotArt(2)}<span>Detail</span></div>
+      <div class="shot">${shotArt(3)}<span>Far view</span></div>
+    </div></div>`;
+}
+
+function renderNarrative(z){
+  const player = z.audioUrl ? '' : `<div class="player" id="player">
+      <button class="play" id="playbtn" aria-label="Play narration">
+        <svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor" id="playicon"><path d="M8 5v14l11-7z"/></svg>
+      </button>
+      <div class="meta">
+        <div class="t">Narration</div>
+        <div class="track"><i id="bar"></i></div>
+        <div class="time" id="pstatus">Tap to replay</div>
+      </div>
+      <div class="eq"><i></i><i></i><i></i><i></i><i></i></div>
+    </div>`;
+  return `${player}
+    <div class="chips" style="margin:0 0 4px"><div class="chip">❄ ${esc(z.season)} story</div></div>
+    <p class="narr-text">${esc(z.text)}</p>`;
+}
+
+function renderGeneral(z){
+  return `<div class="chips" style="margin-bottom:16px"><div class="chip">▲ ${esc(z.elev)}</div></div>
+    <p class="vista">${esc(z.text)}</p>
+    <div class="photos"><div class="lbl">Photos</div><div class="shots">
+      <div class="shot">${shotArt(4)}<span>View</span></div>
+      <div class="shot">${shotArt(2)}<span>Detail</span></div>
+      <div class="shot">${shotArt(1)}<span>Approach</span></div>
+    </div></div>`;
+}
+
+/* ---------- Chase Life home (conditions dial + phone compass) ---------- */
+const LOAD_BEARING = (WX.windDeg + 180) % 360;   // lee faces = best load
+let heading = 0;            // phone heading from North; updated by sensor or drag
+let compassLive = false;
+let wasAligned = false;
+function compassName(deg){
+  const n=['N','NNE','NE','ENE','E','ESE','SE','SSE','S','SSW','SW','WSW','W','WNW','NW','NNW'];
+  return n[Math.round((((deg%360)+360)%360)/22.5)%16];
+}
+function angularDiff(a,b){ return Math.abs(((a-b)%360+540)%360-180); }
+
+function renderHome(){
+  const w=WX, cx=130, cy=130, d2r=Math.PI/180;
+  const f=Math.min(1, w.newSnow/w.newSnowMax);
+  const R=84, C=2*Math.PI*R, off=(C*(1-f)).toFixed(1);
+  const snowCol = w.isRain ? '#5b7088' : (w.newSnow>=12 ? '#ff6a3d' : '#8fb6d4');
+  const OR=108;
+  const pt=(deg,r)=>[(cx+r*Math.sin(deg*d2r)).toFixed(1),(cy-r*Math.cos(deg*d2r)).toFixed(1)];
+  let ticks='';
+  [['N',0],['E',90],['S',180],['W',270]].forEach(([L,deg])=>{
+    const a=pt(deg,OR), b=pt(deg,OR-7), t=pt(deg,OR+13);
+    ticks+=`<line x1="${a[0]}" y1="${a[1]}" x2="${b[0]}" y2="${b[1]}" stroke="#2b3c56" stroke-width="2"/>`;
+    ticks+=`<text x="${t[0]}" y="${t[1]}" fill="#5b7088" font-family="Barlow Condensed" font-size="11" text-anchor="middle" dominant-baseline="central">${L}</text>`;
+  });
+  const wf=pt(w.windDeg,OR), wfi=pt(w.windDeg,OR-6);
+  const windTick=`<line x1="${wf[0]}" y1="${wf[1]}" x2="${wfi[0]}" y2="${wfi[1]}" stroke="#5b7088" stroke-width="2.5"/>`;
+  const ap=pt(LOAD_BEARING,OR+12), b1=pt(LOAD_BEARING-5,OR-1), b2=pt(LOAD_BEARING+5,OR-1), ll=pt(LOAD_BEARING,OR+24);
+  const loadMarker=`<polygon points="${ap[0]},${ap[1]} ${b1[0]},${b1[1]} ${b2[0]},${b2[1]}" fill="#ff6a3d"/>`+
+    `<text x="${ll[0]}" y="${ll[1]}" fill="#ff6a3d" font-family="Barlow Condensed" font-size="12" font-weight="700" text-anchor="middle" dominant-baseline="central">${compassName(LOAD_BEARING)}</text>`;
+  return `<div class="home">
+    <div class="wxhead"><span class="loc">Kicking Horse</span><span class="when">${w.date} \u00b7 ${w.status}</span></div>
+    <div class="patrol-line">● Patrol-controlled mountain</div>
+    <div class="homedial" id="homedial" title="Tap to hear report \u00b7 drag to aim">
+      <svg viewBox="0 0 260 260" xmlns="http://www.w3.org/2000/svg">
+        <g id="compassRot">
+          <circle cx="130" cy="130" r="108" fill="none" stroke="#22324a" stroke-width="1.5"/>
+          ${ticks}${windTick}${loadMarker}
+        </g>
+        <g transform="rotate(-90 130 130)">
+          <circle cx="130" cy="130" r="84" fill="none" stroke="#1b2738" stroke-width="12"/>
+          <circle cx="130" cy="130" r="84" fill="none" stroke="${snowCol}" stroke-width="12" stroke-linecap="round" stroke-dasharray="${C.toFixed(1)}" stroke-dashoffset="${off}"/>
+        </g>
+        <polygon id="aimNotch" points="130,7 123,20 137,20" fill="#8fb6d4"/>
+      </svg>
+      <div class="center">
+        <div class="big">${w.newSnow}</div>
+        <div class="unit">cm new snow</div>
+        <div class="stat" id="aimStatus">Turn to face ${compassName(LOAD_BEARING)} load</div>
+      </div>
+    </div>
+    <div class="wxrow">
+      <div><span class="k">Temp</span><span class="v">${w.temp}\u00b0</span></div>
+      <div><span class="k">Wind</span><span class="v">${w.wind} <small>km/h</small></span></div>
+      <div><span class="k">Base</span><span class="v">${w.base} <small>cm</small></span></div>
+      <div><span class="k">Sky</span><span class="v">${w.sky}</span></div>
+    </div>
+    <p class="wxcall">${w.call}</p>
+    <div class="daysim"><button class="simchip" id="sim-vis">Visibility: ${cap(w.visibility)}</button><button class="simchip" id="sim-surf">Surface: ${cap(w.surface)}</button></div>
+    <div class="tap-hint" style="margin:2px 0 0">${dataNote}</div>
+    <button class="compass-btn" id="compassBtn">Use phone compass</button>
+    <div class="compass-note" id="compassNote"></div>
+    <div class="tap-hint">Tap the dial to hear the report \u00b7 drag to aim</div>
+  </div>`;
+}
+
+function homeSpeech(){
+  const w=WX;
+  return `${w.newSnow} centimeters of new snow overnight. ${w.isRain?'Mixed with rain. ':''}Wind ${w.wind} kilometres an hour from ${sayWords(w.windDir)}. Best load on ${compassName(LOAD_BEARING)} faces. ${w.call}`;
+}
+
+function updateCompass(){
+  const g=document.getElementById('compassRot');
+  if(g) g.setAttribute('transform', `rotate(${(-heading).toFixed(1)} 130 130)`);
+  const aligned = angularDiff(heading, LOAD_BEARING) < 8;
+  const notch=document.getElementById('aimNotch');
+  if(notch) notch.setAttribute('fill', aligned ? '#38e0a6' : '#8fb6d4');
+  const st=document.getElementById('aimStatus');
+  if(st){
+    st.textContent = aligned ? ('Facing the load \u00b7 '+compassName(LOAD_BEARING))
+                             : ('Turn to face '+compassName(LOAD_BEARING)+' load');
+    st.style.color = aligned ? '#38e0a6' : '';
+  }
+  if(aligned && !wasAligned && voiceOn) speak('Facing the loaded snow. '+compassName(LOAD_BEARING)+' faces.');
+  wasAligned = aligned;
+}
+
+function onOrient(e){
+  let h=null;
+  if(typeof e.webkitCompassHeading==='number') h=e.webkitCompassHeading;
+  else if(typeof e.alpha==='number') h=360-e.alpha;
+  if(h==null||isNaN(h)) return;
+  compassLive=true; heading=((h%360)+360)%360; updateCompass();
+  const note=document.getElementById('compassNote'); if(note) note.textContent='Compass live \u2014 aim the phone at the snow';
+}
+function enableCompass(){
+  const note=document.getElementById('compassNote');
+  if(typeof DeviceOrientationEvent!=='undefined' && typeof DeviceOrientationEvent.requestPermission==='function'){
+    DeviceOrientationEvent.requestPermission().then(r=>{
+      if(r==='granted'){ window.addEventListener('deviceorientation', onOrient); }
+      else if(note){ note.textContent='Permission denied \u2014 drag the dial to aim'; }
+    }).catch(()=>{ if(note) note.textContent='Compass needs https \u2014 drag the dial to aim'; });
+  } else if('ondeviceorientationabsolute' in window){ window.addEventListener('deviceorientationabsolute', onOrient); }
+  else if('DeviceOrientationEvent' in window){ window.addEventListener('deviceorientation', onOrient); }
+  else if(note){ note.textContent='No compass here \u2014 drag the dial to aim'; }
+  const btn=document.getElementById('compassBtn'); if(btn) btn.style.display='none';
+  setTimeout(()=>{ if(!compassLive && note) note.textContent='No compass detected \u2014 drag the dial to aim'; }, 1600);
+}
+
+function wireHome(){
+  const btn=document.getElementById('compassBtn');
+  if(btn) btn.addEventListener('click', enableCompass);
+  const d=document.getElementById('homedial');
+  if(d){
+    let dragging=false,lastX=0,moved=false;
+    d.addEventListener('pointerdown',e=>{ dragging=true; moved=false; lastX=e.clientX; try{d.setPointerCapture(e.pointerId);}catch(_){} });
+    d.addEventListener('pointermove',e=>{ if(!dragging||compassLive) return; const dx=e.clientX-lastX; if(Math.abs(dx)>2)moved=true; heading=((heading+dx*0.8)%360+360)%360; lastX=e.clientX; updateCompass(); });
+    d.addEventListener('pointerup',()=>{ dragging=false; if(!moved && voiceOn) speak(homeSpeech()); });
+  }
+  const cyc=(arr,v)=>arr[(arr.indexOf(v)+1)%arr.length];
+  const vb=document.getElementById('sim-vis');
+  if(vb) vb.addEventListener('click',()=>{ WX.visibility=cyc(['good','moderate','poor'],WX.visibility); rebuild(); refreshDaySim(); });
+  const sb=document.getElementById('sim-surf');
+  if(sb) sb.addEventListener('click',()=>{ WX.surface=cyc(['soft','firm','icy'],WX.surface); rebuild(); refreshDaySim(); });
+  updateCompass();
+}
+
+/* ---------- state + navigation ---------- */
+let idx = -1;           // -1 = standby
+let timer = null;       // narration sim
+const phone=document.getElementById('phone');
+const elStandby=document.getElementById('standby');
+const elReveal=document.getElementById('reveal');
+const elHero=document.getElementById('hero');
+const elBody=document.getElementById('body');
+const elScan=document.getElementById('scan');
+const elCount=document.getElementById('zonecount');
+const elHint=document.getElementById('hint');
+
+function stopAudioSim(){ if(timer){clearInterval(timer);timer=null;} }
+
+/* ---------- voice output (Web Speech API) ---------- */
+const synth = ('speechSynthesis' in window) ? window.speechSynthesis : null;
+let voiceOn = true;
+const elVoice = document.getElementById('voicechip');
+function showSpeaking(on){ if(elVoice) elVoice.classList.toggle('on', on); }
+function speak(text){
+  if(!synth) return;
+  synth.cancel();
+  if(!voiceOn || !text){ showSpeaking(false); return; }
+  const u=new SpeechSynthesisUtterance(text);
+  u.rate=1.0;
+  u.onstart=()=>showSpeaking(true);
+  u.onend=()=>showSpeaking(false);
+  synth.speak(u);
+}
+function sayWords(x){ return String(x).replace(/\u2013/g,' to ').replace(/\u00b0/g,' degrees').replace(/\b[NSEW]{2,3}\b/g, m=>m.split('').join(' ')); }
+function announce(z){
+  if(z.type==='winter-chute'){
+    const parts = [z.name + (z.runNumber ? ', run ' + z.runNumber + '.' : '.')];
+    if(z.difficulty==='double-black') parts.push('Double black. Unmarked hazards. Experts only.');
+    else if(z.difficulty==='black') parts.push('Black diamond.');
+    else if(DIFF[z.difficulty]) parts.push(DIFF[z.difficulty].label + ' run.');
+    if(z.conditions==='dangerous') parts.push('Conditions dangerous.' + (z.conditionsReason ? ' ' + z.conditionsReason + '.' : ''));
+    else if(COND[z.conditions]) parts.push('Conditions ' + COND[z.conditions].label.toLowerCase() + '.');
+    if(LOAD[z.snowLoad]) parts.push('Snow load ' + LOAD[z.snowLoad].label.toLowerCase() + '.');
+    parts.push('Pitch ' + sayWords(z.pitch) + '.');
+    parts.push('Loads on ' + sayWords(z.loads) + '.');
+    if(z.closesEarly) parts.push(z.closesEarly + '.');
+    speak(parts.join(' '));
+  } else if(z.type==='general'){
+    speak(`${z.name}. ${sayWords(z.elev)}. ${z.text}`);
+  }
+}
+
+function render(){
+  if(synth) synth.cancel();
+  showSpeaking(false);
+  const repeatBtn=document.getElementById('repeat');
+  elCount.textContent = idx<0 ? `0 / ${ZONES.length} zones` : `Zone ${idx+1} / ${ZONES.length}`;
+  if(elPick) elPick.value = String(idx);
+  if(idx<0){
+    elStandby.style.display='flex'; elReveal.style.display='none'; elHint.style.display='';
+    if(elAudioDock) elAudioDock.innerHTML='';
+    if(repeatBtn) repeatBtn.style.display='none';
+    return;
+  }
+  elHint.style.display='none';
+  const z=ZONES[idx];
+  elStandby.style.display='none'; elReveal.style.display='flex';
+  elHero.innerHTML=renderHero(z);
+  elBody.innerHTML = z.type==='winter-chute' ? renderChute(z)
+    : z.type==='narrative-poi' ? renderNarrative(z) : renderGeneral(z);
+  elReveal.classList.remove('reveal-anim'); void elReveal.offsetWidth; elReveal.classList.add('reveal-anim');
+  elScan.classList.remove('go'); void elScan.offsetWidth; elScan.classList.add('go');
+  if(repeatBtn) repeatBtn.style.display = voiceOn ? 'flex' : 'none';
+  renderAudioDock(z);
+  if(z.type==='narrative-poi'){ if(!z.audioUrl) wirePlayer(z); else if(voiceOn) playDockAudio(); }
+  else { announce(z); }
+}
+
+function next(){ idx = idx+1 >= ZONES.length ? -1 : idx+1; render(); }
+function prev(){ idx = idx-1 < -1 ? ZONES.length-1 : idx-1; render(); }
+
+/* narration simulation (visual only — no audio file in a prototype) */
+function wirePlayer(z){
+  const btn=document.getElementById('playbtn');
+  const icon=document.getElementById('playicon');
+  const bar=document.getElementById('bar');
+  const status=document.getElementById('pstatus');
+  const player=document.getElementById('player');
+  const PLAY='<path d="M8 5v14l11-7z"/>';
+  const PAUSE='<rect x="7" y="5" width="3.4" height="14" rx="1"/><rect x="13.6" y="5" width="3.4" height="14" rx="1"/>';
+  let playing=false;
+  function setUI(on){ playing=on; player.classList.toggle('playing',on); icon.innerHTML=on?PAUSE:PLAY; if(status) status.textContent=on?'Playing aloud\u2026':'Tap to replay'; showSpeaking(on); }
+  function stop(){ if(synth) synth.cancel(); setUI(false); }
+  function start(){
+    if(!synth){ if(status) status.textContent='Voice not supported on this browser'; return; }
+    synth.cancel();
+    const u=new SpeechSynthesisUtterance(z.text);
+    u.rate=0.97;
+    u.onboundary=e=>{ if(typeof e.charIndex==='number'){ bar.style.width=Math.min(100,(e.charIndex/z.text.length)*100)+'%'; } };
+    u.onstart=()=>setUI(true);
+    u.onend=()=>{ bar.style.width='100%'; setUI(false); };
+    synth.speak(u);
+  }
+  btn.onclick=()=>{ playing?stop():start(); };
+  if(voiceOn) start();
+}
+
+/* ---------- audio dock + zone picker (content preview) ---------- */
+const elAudioDock = document.getElementById('audiodock');
+const elPick = document.getElementById('zonepick');
+function renderAudioDock(z){
+  if(!elAudioDock) return;
+  if(z && z.audioUrl){
+    const lab = z.type==='winter-chute' ? 'Recorded audio · plays after the safety call'
+             : z.type==='narrative-poi' ? 'Narration' : 'Audio';
+    elAudioDock.innerHTML = '<div class="audiocard"><div class="lab">'+lab+'</div>'
+      + '<audio id="dockaudio" controls preload="none" src="'+encodeURI(z.audioUrl)+'"></audio></div>';
+  } else {
+    elAudioDock.innerHTML = '<div class="audiocard none">No audio attached to this zone.</div>';
+  }
+}
+function playDockAudio(){ const a=document.getElementById('dockaudio'); if(a) a.play().catch(function(){}); }
+function fillPicker(){
+  if(!elPick) return;
+  elPick.innerHTML = '<option value="-1">— home —</option>' + ZONES.map(function(z,i){
+    const tag = z.type==='winter-chute'?'⛷':z.type==='narrative-poi'?'📖':'▲';
+    return '<option value="'+i+'">'+tag+' '+esc(z.name)+'</option>';
+  }).join('');
+  elPick.value = String(idx);
+}
+if(elPick) elPick.addEventListener('change', function(){ idx=parseInt(elPick.value,10); render(); });
+
+/* controls */
+document.getElementById('next').addEventListener('click', next);
+document.getElementById('repeat').addEventListener('click', ()=>{
+  if(idx<0) return;
+  const z=ZONES[idx];
+  if(z.type==='narrative-poi'){ if(z.audioUrl) playDockAudio(); else wirePlayer(z); }
+  else announce(z);
+});
+window.addEventListener('keydown', e=>{
+  if(e.key==='Tab'){ e.preventDefault(); e.shiftKey?prev():next(); }
+  else if(e.key==='ArrowRight'){ next(); }
+  else if(e.key==='ArrowLeft'){ prev(); }
+});
+
+/* master toggle */
+const toggle=document.getElementById('toggle');
+const togtext=document.getElementById('togtext');
+let on=true;
+function setToggle(){
+  voiceOn = on;
+  phone.classList.toggle('paused',!on);
+  toggle.classList.toggle('off',!on);
+  togtext.textContent = on ? 'Reveals on' : 'Reveals off';
+  if(!on && synth) synth.cancel();
+  if(!on) showSpeaking(false);
+  const rb=document.getElementById('repeat');
+  if(rb) rb.style.display = (on && idx>=0) ? 'flex' : 'none';
+}
+toggle.addEventListener('click', ()=>{ on=!on; setToggle(); });
+toggle.addEventListener('keydown', e=>{ if(e.key==='Enter'||e.key===' '){ e.preventDefault(); on=!on; setToggle(); } });
+
+const API_URL = (location.protocol==='http:'||location.protocol==='https:') ? '/api/pois' : 'https://chase-life.pages.dev/api/pois';
+async function loadCatalog(){
+  try{
+    const r = await fetch(API_URL, {cache:'no-store'});
+    if(!r.ok) throw new Error('HTTP '+r.status);
+    const d = await r.json();
+    const pois = Array.isArray(d.pois) ? d.pois : [];
+    if(!pois.length) throw new Error('empty');
+    RAW = pois; ZONES = RAW.map(poiToZone);
+    const n = ZONES.length;
+    dataNote = n + ' live ' + (n===1?'POI':'POIs') + ' from your catalog';
+  } catch(e){
+    RAW = []; ZONES = SAMPLE.slice();
+    dataNote = 'Sample data — couldn’t reach your catalog';
+  }
+}
+async function boot(){
+  await loadCatalog();
+  document.getElementById('home').innerHTML = renderHome();
+  wireHome();
+  fillPicker();
+  render();
+}
+boot();
+</script>
+</body>
+</html>
