@@ -83,10 +83,23 @@ function validateWinterChuteFields(poi, errors) {
   if (poi.noFallZone !== undefined && typeof poi.noFallZone !== 'boolean') {
     errors.push('noFallZone must be a boolean if present');
   }
-  if (!Array.isArray(poi.bottomLatLon) || poi.bottomLatLon.length !== 2) {
-    errors.push('bottomLatLon is required for winter-chute and must be [lat, lon]');
-  } else if (!isInsideKHBbox(poi.bottomLatLon)) {
-    errors.push(`bottomLatLon ${JSON.stringify(poi.bottomLatLon)} is outside the KH bounding box`);
+  // Fall line: aspectDeg (preferred) and/or bottomLatLon (optional). At least one required.
+  if (poi.bottomLatLon !== undefined && poi.bottomLatLon !== null) {
+    if (!Array.isArray(poi.bottomLatLon) || poi.bottomLatLon.length !== 2) {
+      errors.push('bottomLatLon must be [lat, lon] if present');
+    } else if (!isInsideKHBbox(poi.bottomLatLon)) {
+      errors.push(`bottomLatLon ${JSON.stringify(poi.bottomLatLon)} is outside the KH bounding box`);
+    }
+  }
+  if (poi.aspectDeg !== undefined && poi.aspectDeg !== null && poi.aspectDeg !== '') {
+    if (!isNumber(poi.aspectDeg) || poi.aspectDeg < 0 || poi.aspectDeg >= 360) {
+      errors.push('aspectDeg must be a number 0–359 (the fall-line / descent bearing) if present');
+    }
+  }
+  const hasBottom = Array.isArray(poi.bottomLatLon) && poi.bottomLatLon.length === 2;
+  const hasAspect = isNumber(poi.aspectDeg) && poi.aspectDeg >= 0 && poi.aspectDeg < 360;
+  if (!hasBottom && !hasAspect) {
+    errors.push('winter-chute needs a fall line: set aspectDeg (descent bearing 0–359) or a bottomLatLon');
   }
   if (!isNumber(poi.slopeMin_deg) || !isNumber(poi.slopeMax_deg)) {
     errors.push('slopeMin_deg and slopeMax_deg are required and must be numbers');
