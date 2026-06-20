@@ -1801,13 +1801,13 @@ $refreshBtn.addEventListener('click', () => { loadPOIs(); toast('Refreshing POI 
 function blankFormState() {
   return {
     type: null,
-    id: '', name: '', region: 'Kicking Horse', geoDescription: '', notes: '',
-    topLat: '', topLon: '', radiusMeters: '',
+    id: '', name: '', region: '', geoDescription: 'Kicking Horse', notes: '',
+    topLat: '', topLon: '', radiusMeters: 40,
     // winter-chute
     runNumber: '',
     bottomLat: '', bottomLon: '', aspect: '',
     slopeMin_deg: 30, slopeMax_deg: 45,
-    widthMin_m: '', widthMax_m: '',
+    widthMin_m: 20, widthMax_m: 30,
     topElev_m: '', bottomElev_m: '',
     stormDirPreference: '',
     difficulty: '',
@@ -1879,9 +1879,12 @@ function openAddForm() {
   resetFormUI();
 
   // resetFormUI() clears the inputs — write the blank-form defaults back in so they actually show.
-  document.getElementById('f-region').value = state.form.region;
+  document.getElementById('f-geoDesc').value = state.form.geoDescription;
+  document.getElementById('f-radius').value = state.form.radiusMeters;
   document.getElementById('f-slopeMin').value = state.form.slopeMin_deg;
   document.getElementById('f-slopeMax').value = state.form.slopeMax_deg;
+  document.getElementById('f-widthMin').value = state.form.widthMin_m;
+  document.getElementById('f-widthMax').value = state.form.widthMax_m;
 
   // Heading
   document.getElementById('form-heading').textContent = 'New POI';
