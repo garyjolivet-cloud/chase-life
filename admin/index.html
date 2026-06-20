@@ -1801,12 +1801,12 @@ $refreshBtn.addEventListener('click', () => { loadPOIs(); toast('Refreshing POI 
 function blankFormState() {
   return {
     type: null,
-    id: '', name: '', region: '', geoDescription: '', notes: '',
+    id: '', name: '', region: '', geoDescription: 'Kicking Horse', notes: '',
     topLat: '', topLon: '', radiusMeters: '',
     // winter-chute
     runNumber: '',
     bottomLat: '', bottomLon: '', aspect: '',
-    slopeMin_deg: '', slopeMax_deg: '',
+    slopeMin_deg: 30, slopeMax_deg: 45,
     widthMin_m: '', widthMax_m: '',
     topElev_m: '', bottomElev_m: '',
     stormDirPreference: '',
@@ -2108,6 +2108,7 @@ document.getElementById('delete-confirm-btn').addEventListener('click', async ()
     const btn = e.target.closest('.compass-btn');
     if (!btn) return;
     state.form.stormDirPreference = btn.dataset.dir;
+    state.form._stormAuto = false;
     document.querySelectorAll('.compass-btn').forEach(b => b.classList.toggle('selected', b === btn));
     updateFormStatus();
   });
@@ -2224,6 +2225,35 @@ wireNumberField('f-aspect', 'aspect');
 })();
 wireNumberField('f-slopeMin', 'slopeMin_deg');
 wireNumberField('f-slopeMax', 'slopeMax_deg');
+
+// Default snow-load (storm) direction = the top→bottom vector (or aspect), until the user picks one manually.
+function bearingDeg(aLat, aLon, bLat, bLon) {
+  const mlon = 111320 * Math.cos(aLat * Math.PI / 180);
+  const e = (bLon - aLon) * mlon, n = (bLat - aLat) * 111320;
+  return (Math.atan2(e, n) * 180 / Math.PI + 360) % 360;
+}
+function autoStormDir() {
+  const f = state.form;
+  if (f.type !== 'winter-chute') return;
+  if (f.stormDirPreference && !f._stormAuto) return; // a manual pick wins
+  let brg = null;
+  if (typeof f.topLat === 'number' && typeof f.topLon === 'number' &&
+      typeof f.bottomLat === 'number' && typeof f.bottomLon === 'number') {
+    brg = bearingDeg(f.topLat, f.topLon, f.bottomLat, f.bottomLon);
+  } else if (typeof f.aspect === 'number') {
+    brg = f.aspect;
+  }
+  if (brg == null) return;
+  const dir = COMPASS_16[Math.round((((brg % 360) + 360) % 360) / 22.5) % 16];
+  f.stormDirPreference = dir;
+  f._stormAuto = true;
+  document.querySelectorAll('.compass-btn').forEach(b => b.classList.toggle('selected', b.dataset.dir === dir));
+  if (typeof updateFormStatus === 'function') updateFormStatus();
+}
+['f-topLat', 'f-topLon', 'f-bottomLat', 'f-bottomLon', 'f-aspect'].forEach(id => {
+  const el = document.getElementById(id);
+  if (el) el.addEventListener('input', () => setTimeout(autoStormDir, 0));
+});
 wireNumberField('f-widthMin', 'widthMin_m');
 wireNumberField('f-widthMax', 'widthMax_m');
 wireNumberField('f-topElev', 'topElev_m');
