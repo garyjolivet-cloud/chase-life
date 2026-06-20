@@ -1,0 +1,140 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Chase Life — Region Cleaner</title>
+<style>
+  :root{--night:#0a1018;--slate:#141d2b;--rim:#26344a;--coral:#ff6a3d;--snow:#eef4fb;--ice:#8fb6d4;--fog:#5b7088;--go:#38e0a6;--hazard:#ff2f4e;--amber:#ffc24d;}
+  *{box-sizing:border-box;} body{margin:0;background:#05080d;color:var(--snow);font-family:-apple-system,Segoe UI,Roboto,sans-serif;}
+  .wrap{max-width:720px;margin:0 auto;padding:20px;}
+  h1{font-size:19px;margin:0 0 4px;} .sub{color:var(--ice);font-size:13px;margin-bottom:16px;}
+  .card{background:var(--night);border:1px solid var(--rim);border-radius:12px;padding:16px;margin-bottom:14px;}
+  label{display:block;font-size:12px;color:var(--ice);text-transform:uppercase;letter-spacing:.06em;margin-bottom:6px;}
+  input[type=password]{width:100%;background:var(--slate);color:var(--snow);border:1px solid var(--rim);border-radius:9px;padding:11px;font-size:14px;}
+  button{font-size:13px;font-weight:700;letter-spacing:.05em;text-transform:uppercase;border:none;border-radius:9px;padding:12px 16px;cursor:pointer;margin-top:10px;}
+  .primary{background:var(--coral);color:#08111d;} .primary:disabled{opacity:.4;cursor:not-allowed;}
+  .ghost{background:none;border:1px solid var(--rim);color:var(--ice);}
+  table{width:100%;border-collapse:collapse;font-size:13px;margin-top:8px;}
+  th{text-align:left;color:var(--fog);font-size:10px;text-transform:uppercase;letter-spacing:.06em;padding:5px 6px;border-bottom:1px solid var(--rim);}
+  td{padding:6px;border-bottom:1px solid #1b2638;color:var(--ice);}
+  td .old{color:var(--fog);} td .new{color:var(--go);font-weight:600;}
+  .stat{font-size:13px;color:var(--ice);margin-top:8px;} .err{color:var(--hazard);} .ok{color:var(--go);}
+  .muted{color:var(--fog);font-size:12px;line-height:1.5;}
+  code{background:var(--slate);padding:1px 5px;border-radius:5px;font-size:12px;}
+  .row{display:flex;gap:10px;flex-wrap:wrap;align-items:center;}
+  .bar{height:6px;background:var(--slate);border-radius:3px;overflow:hidden;margin-top:10px;} .bar i{display:block;height:100%;background:var(--go);width:0;transition:width .2s;}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <h1>Region Cleaner</h1>
+  <div class="sub">Standardizes the <code>region</code> field across your chutes. Reads each live record, changes <strong>only</strong> the region, and writes the whole record back — every other field is preserved.</div>
+
+  <div id="warnLocal" class="card" style="display:none;border-color:var(--hazard)">
+    <div class="err">⚠ Open this from your site, not a local file.</div>
+    <div class="muted">Saving needs the same origin as the API. Commit this as <code>admin/clean-regions.html</code> and open <code>https://chase-life.pages.dev/admin/clean-regions.html</code>.</div>
+  </div>
+
+  <div class="card">
+    <label for="tok">Admin token</label>
+    <input type="password" id="tok" placeholder="ADMIN_TOKEN" autocomplete="off">
+    <div class="row">
+      <button class="ghost" id="loadBtn">Load catalog & preview</button>
+    </div>
+    <div class="stat" id="loadStat"></div>
+  </div>
+
+  <div class="card" id="previewCard" style="display:none">
+    <div class="stat" id="changeCount"></div>
+    <table id="previewTbl"><thead><tr><th>Run</th><th>Chute</th><th>Region change</th></tr></thead><tbody></tbody></table>
+    <div class="bar" id="progBar" style="display:none"><i></i></div>
+    <div class="row">
+      <button class="primary" id="applyBtn" disabled>Apply region updates</button>
+      <button class="ghost" id="reloadBtn">Re-check</button>
+    </div>
+    <div class="stat" id="applyStat"></div>
+    <div class="muted" style="margin-top:8px">Only changed records are written. Each write re-validates server-side and preserves <code>createdAt</code>. Safe to run twice — a second run finds nothing to change.</div>
+  </div>
+</div>
+
+<script>
+const MAP = {
+  'cpr ridge':'CPR Ridge','cpr':'CPR Ridge','cpr head wall':'CPR Head Wall',
+  'crystal bowl':'Crystal Bowl','crystal bowl head wall':'Crystal Bowl Head Wall',
+  'bowl over':'Bowl Over','bowl overe':'Bowl Over',
+  'bowl over head wall':'Bowl Over Head Wall','bowl over headwall':'Bowl Over Head Wall',
+  't1':'T1','t1 n':'T1 North','t1 south':'T1 South','t2':'T2','t2 south':'T2 South','t2 north':'T2 North',
+  'redemption':'Redemption','redemption ridge':'Redemption Ridge',
+  'white wall':'White Wall','ozone':'Ozone','mini ridge':'Mini Ridge'
+};
+const norm = s => String(s||'').trim().toLowerCase().replace(/\s+/g,' ');
+const target = region => MAP[norm(region)] || region;
+
+let records = [], changes = [];
+
+if (location.protocol === 'file:') document.getElementById('warnLocal').style.display='block';
+
+document.getElementById('loadBtn').addEventListener('click', loadCatalog);
+document.getElementById('reloadBtn').addEventListener('click', loadCatalog);
+
+async function loadCatalog(){
+  const stat=document.getElementById('loadStat');
+  stat.textContent='Loading…'; stat.className='stat';
+  try{
+    const r=await fetch('/api/pois',{cache:'no-store'});
+    if(!r.ok) throw new Error('HTTP '+r.status);
+    const d=await r.json();
+    records=(d.pois||[]).filter(p=>p.type==='winter-chute');
+    changes=records.filter(p=>target(p.region)!==p.region)
+      .map(p=>({p, from:p.region, to:target(p.region)}));
+    stat.innerHTML='Loaded <strong>'+records.length+'</strong> chutes.';
+    renderPreview();
+  }catch(e){
+    stat.className='stat err'; stat.textContent='Load failed: '+e.message+(location.protocol==='file:'?' (open from the site, not a local file)':'');
+  }
+}
+
+function renderPreview(){
+  document.getElementById('previewCard').style.display='block';
+  const tb=document.querySelector('#previewTbl tbody');
+  document.getElementById('changeCount').innerHTML = changes.length
+    ? '<strong>'+changes.length+'</strong> chute'+(changes.length>1?'s':'')+' will change region.'
+    : 'Nothing to change — regions already standardized. ✓';
+  tb.innerHTML = changes.map(c=>'<tr><td>'+esc(c.p.runNumber||'?')+'</td><td>'+esc(c.p.name)+
+    '</td><td><span class="old">'+esc(c.from)+'</span> → <span class="new">'+esc(c.to)+'</span></td></tr>').join('');
+  const apply=document.getElementById('applyBtn');
+  apply.disabled = changes.length===0;
+  apply.textContent = changes.length ? ('Apply '+changes.length+' region update'+(changes.length>1?'s':'')) : 'Nothing to apply';
+  document.getElementById('applyStat').textContent='';
+  document.getElementById('progBar').style.display='none';
+  document.querySelector('#progBar i').style.width='0';
+}
+
+document.getElementById('applyBtn').addEventListener('click', applyChanges);
+async function applyChanges(){
+  const tok=document.getElementById('tok').value.trim();
+  if(!tok){ document.getElementById('applyStat').className='stat err'; document.getElementById('applyStat').textContent='Enter your admin token first.'; return; }
+  const apply=document.getElementById('applyBtn'); apply.disabled=true;
+  const stat=document.getElementById('applyStat'); stat.className='stat';
+  const bar=document.getElementById('progBar'); const fill=bar.querySelector('i'); bar.style.display='block';
+  let ok=0, fail=0, errs=[];
+  for(let i=0;i<changes.length;i++){
+    const c=changes[i];
+    const body=Object.assign({}, c.p, {region:c.to});
+    try{
+      const r=await fetch('/api/pois',{method:'POST',headers:{'Content-Type':'application/json','Authorization':'Bearer '+tok},body:JSON.stringify(body)});
+      if(!r.ok){ fail++; const j=await r.json().catch(()=>({})); errs.push(c.p.name+': '+(j.error||('HTTP '+r.status))+(j.errors?(' — '+j.errors.join('; ')):'')); }
+      else ok++;
+    }catch(e){ fail++; errs.push(c.p.name+': '+e.message); }
+    fill.style.width=Math.round(((i+1)/changes.length)*100)+'%';
+    stat.innerHTML='Writing… <strong>'+(i+1)+'</strong>/'+changes.length+' · <span class="ok">'+ok+' ok</span>'+(fail?' · <span class="err">'+fail+' failed</span>':'');
+  }
+  stat.innerHTML='Done. <span class="ok">'+ok+' updated</span>'+(fail?' · <span class="err">'+fail+' failed</span>':'')+'.'+(errs.length?'<br><span class="err">'+errs.map(esc).join('<br>')+'</span>':'');
+  if(fail===0) setTimeout(loadCatalog, 800); // re-check shows clean
+}
+
+function esc(x){return String(x).replace(/[&<>"]/g,m=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[m]));}
+</script>
+</body>
+</html>
