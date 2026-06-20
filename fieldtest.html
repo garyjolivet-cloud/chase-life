@@ -129,7 +129,9 @@
   <div class="row" style="margin-bottom:8px"><select id="capChute" style="flex:1;background:#141d2b;color:#eef4fb;border:1px solid var(--rim);border-radius:9px;padding:11px;font-family:var(--cond);font-size:14px"></select></div>
   <div class="row" style="gap:8px"><button class="capbtn" id="capTop">📍 Capture this spot</button><button class="capbtn alt" id="capCompass">🧭 Enable compass</button></div>
   <div class="caphint" id="capHint">Stand at a chute top and tap <b>Capture this spot</b> (logs lat/lon, altitude, accuracy). Then point the phone straight down the fall line and tap <b>Sight</b> on that row to record the descent bearing.</div>
+  <div id="capLive" style="font-family:var(--cond);font-size:16px;font-weight:600;color:#eef4fb;text-align:center;padding:10px;background:#141d2b;border:1px solid var(--rim);border-radius:9px;margin:8px 0">compass off · GPS –</div>
   <div id="caps"></div>
+  <textarea id="capOut" style="display:none;width:100%;height:120px;margin-top:8px;background:#0b1118;color:#eef4fb;border:1px solid var(--rim);border-radius:9px;padding:8px;font-family:monospace;font-size:11px"></textarea>
 
   <div class="sectit"><span>Event log</span><button class="copy" id="copyLog">Copy</button></div>
   <div class="log" id="log"><div class="t">— start walking —</div></div>
@@ -275,6 +277,7 @@ function onFix(pos){
   fixCount++;
   const c=pos.coords;
   lastFix={ lat:c.latitude, lon:c.longitude, accuracy:c.accuracy, alt:c.altitude, altAcc:c.altitudeAccuracy, ts:performance.now() };
+  if(typeof updateCapLive==='function') updateCapLive();
   accMin=Math.min(accMin,c.accuracy); accMax=Math.max(accMax,c.accuracy);
   // ignore a stale OS-cached fix (e.g. the first one handed back after the screen wakes)
   const ageMs = pos.timestamp ? (Date.now()-pos.timestamp) : 0;
@@ -401,6 +404,14 @@ function onOrient(e){
   let h = (typeof e.webkitCompassHeading==='number') ? e.webkitCompassHeading
         : (e.absolute && typeof e.alpha==='number') ? (360 - e.alpha) : null;
   if(h!=null) lastHeading=((h%360)+360)%360;
+  updateCapLive();
+}
+function updateCapLive(){
+  const el=document.getElementById('capLive'); if(!el) return;
+  const h = (compassOn && lastHeading!=null) ? ('🧭 '+Math.round(lastHeading)+'° '+cpt(lastHeading))
+          : (compassOn ? '🧭 reading…' : 'compass off — tap Enable');
+  const g = (lastFix && lastFix.lat) ? ('📍 ±'+Math.round(lastFix.accuracy||0)+'m') : 'GPS –';
+  el.textContent = h+'  ·  '+g;
 }
 async function enableCompass(){
   try{
@@ -408,7 +419,7 @@ async function enableCompass(){
       const p=await DeviceOrientationEvent.requestPermission(); if(p!=='granted'){ banner('exit','Compass permission denied'); return; }
     }
     window.addEventListener('deviceorientation', onOrient, true);
-    compassOn=true; const b=document.getElementById('capCompass'); b.textContent='🧭 Compass on'; b.classList.remove('alt');
+    compassOn=true; const b=document.getElementById('capCompass'); b.textContent='🧭 Compass on'; b.classList.remove('alt'); updateCapLive();
   }catch(err){ banner('exit','Compass unavailable on this device'); }
 }
 function fillCaptureChutes(){
@@ -452,7 +463,10 @@ document.getElementById('copyCaps').addEventListener('click',()=>{
   const out=captures.map(c=>({ id:c.id, run:c.run, name:c.name, topLatLon:[+c.lat.toFixed(6),+c.lon.toFixed(6)],
     aspectDeg:c.aspect, topElev_m:(c.alt!=null?Math.round(c.alt):null), accuracy_m:Math.round(c.accuracy||0) }));
   const txt=JSON.stringify(out,null,2);
-  if(navigator.clipboard) navigator.clipboard.writeText(txt).then(()=>banner('enter','Captures copied ('+out.length+')'));
+  const showOut=()=>{ const ta=document.getElementById('capOut'); ta.style.display='block'; ta.value=txt; ta.focus(); ta.select(); banner('enter','Select all in the box & copy'); };
+  if(navigator.clipboard && window.isSecureContext){
+    navigator.clipboard.writeText(txt).then(()=>banner('enter','Captures copied ('+out.length+')')).catch(showOut);
+  } else { showOut(); }
 });
 renderCaps();
 
