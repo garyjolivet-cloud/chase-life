@@ -70,6 +70,16 @@
   .tg.on{border-color:var(--coral);color:var(--snow);background:rgba(255,106,61,.1);}
   .err{color:var(--hazard);font-family:var(--cond);font-size:13px;margin-bottom:10px;}
   .hidden{display:none;}
+  .capbtn{flex:1;font-family:var(--cond);font-weight:700;font-size:13px;letter-spacing:.05em;text-transform:uppercase;color:#08111d;background:var(--coral);border:none;border-radius:9px;padding:12px;cursor:pointer;}
+  .capbtn.alt{background:none;border:1px solid var(--rim);color:var(--ice);}
+  .caphint{font-family:var(--cond);font-size:12px;color:var(--fog);line-height:1.5;margin:8px 0;}
+  .caprow{background:var(--slate,#141d2b);border:1px solid var(--rim);border-radius:10px;padding:10px;margin-bottom:8px;}
+  .caprow input.lab{width:100%;background:none;border:none;border-bottom:1px solid var(--rim);color:var(--snow,#eef4fb);font-family:var(--cond);font-size:14px;font-weight:600;padding:2px 0;margin-bottom:6px;}
+  .caprow .meta{font-family:var(--cond);font-size:12px;color:var(--ice);line-height:1.5;}
+  .caprow .meta b{color:var(--snow,#eef4fb);}
+  .caprow .acts{display:flex;gap:8px;margin-top:7px;}
+  .caprow .acts button{font-family:var(--cond);font-size:11px;letter-spacing:.05em;text-transform:uppercase;border-radius:7px;padding:6px 9px;cursor:pointer;border:1px solid var(--rim);background:none;color:var(--ice);}
+  .caprow .acts button.sight{border-color:var(--coral);color:var(--coral);}
 </style>
 </head>
 <body>
@@ -114,6 +124,12 @@
     <span class="tg on" id="tgPower">Power saver</span>
     <span class="tg" id="tgElev">Elev gate</span>
   </div>
+
+  <div class="sectit"><span>Capture points (for the walk)</span><button class="copy" id="copyCaps">Copy JSON</button></div>
+  <div class="row" style="margin-bottom:8px"><select id="capChute" style="flex:1;background:#141d2b;color:#eef4fb;border:1px solid var(--rim);border-radius:9px;padding:11px;font-family:var(--cond);font-size:14px"></select></div>
+  <div class="row" style="gap:8px"><button class="capbtn" id="capTop">📍 Capture this spot</button><button class="capbtn alt" id="capCompass">🧭 Enable compass</button></div>
+  <div class="caphint" id="capHint">Stand at a chute top and tap <b>Capture this spot</b> (logs lat/lon, altitude, accuracy). Then point the phone straight down the fall line and tap <b>Sight</b> on that row to record the descent bearing.</div>
+  <div id="caps"></div>
 
   <div class="sectit"><span>Event log</span><button class="copy" id="copyLog">Copy</button></div>
   <div class="log" id="log"><div class="t">— start walking —</div></div>
@@ -258,7 +274,7 @@ Geofencer.on.tick = snap => {
 function onFix(pos){
   fixCount++;
   const c=pos.coords;
-  lastFix={ lat:c.latitude, lon:c.longitude, accuracy:c.accuracy, ts:performance.now() };
+  lastFix={ lat:c.latitude, lon:c.longitude, accuracy:c.accuracy, alt:c.altitude, altAcc:c.altitudeAccuracy, ts:performance.now() };
   accMin=Math.min(accMin,c.accuracy); accMax=Math.max(accMax,c.accuracy);
   // ignore a stale OS-cached fix (e.g. the first one handed back after the screen wakes)
   const ageMs = pos.timestamp ? (Date.now()-pos.timestamp) : 0;
@@ -377,6 +393,69 @@ document.getElementById('copyLog').addEventListener('click',()=>{
 });
 document.getElementById('startBtn').addEventListener('click',start);
 
+/* ----- capture points: top coords + altitude + fall-line sighting (for the walk) ----- */
+let captures=[], compassOn=false, lastHeading=null;
+const COMPASS16=['N','NNE','NE','ENE','E','ESE','SE','SSE','S','SSW','SW','WSW','W','WNW','NW','NNW'];
+function cpt(d){ return COMPASS16[Math.round(d/22.5)%16]; }
+function onOrient(e){
+  let h = (typeof e.webkitCompassHeading==='number') ? e.webkitCompassHeading
+        : (e.absolute && typeof e.alpha==='number') ? (360 - e.alpha) : null;
+  if(h!=null) lastHeading=((h%360)+360)%360;
+}
+async function enableCompass(){
+  try{
+    if(typeof DeviceOrientationEvent!=='undefined' && typeof DeviceOrientationEvent.requestPermission==='function'){
+      const p=await DeviceOrientationEvent.requestPermission(); if(p!=='granted'){ banner('exit','Compass permission denied'); return; }
+    }
+    window.addEventListener('deviceorientation', onOrient, true);
+    compassOn=true; const b=document.getElementById('capCompass'); b.textContent='🧭 Compass on'; b.classList.remove('alt');
+  }catch(err){ banner('exit','Compass unavailable on this device'); }
+}
+function fillCaptureChutes(){
+  const sel=document.getElementById('capChute'); if(!sel) return;
+  const zs=(Geofencer.zones||[]).slice().sort((a,b)=>String(a.runNumber).localeCompare(String(b.runNumber),undefined,{numeric:true}));
+  sel.innerHTML='<option value="">— which chute are you at? —</option>'
+    + zs.map(z=>'<option value="'+z.id+'" data-run="'+(z.runNumber||'')+'" data-name="'+String(z.name||'').replace(/"/g,'&quot;')+'">Run '+(z.runNumber||'?')+' · '+(z.name||'Chute')+'</option>').join('')
+    + '<option value="__new__">— not in catalog (new chute) —</option>';
+}
+function renderCaps(){
+  const host=document.getElementById('caps');
+  host.innerHTML = captures.map((c,i)=>{
+    const alt=(c.alt==null)?'alt n/a':('alt '+Math.round(c.alt)+'m'+(c.altAcc!=null?' ±'+Math.round(c.altAcc):''));
+    const asp=(c.aspect==null)?'<span style="color:#5b7088">fall line not sighted</span>':('fall line <b>'+cpt(c.aspect)+' '+Math.round(c.aspect)+'°</b>');
+    const tag=c.id?('Run '+c.run+' · '+c.name):(c.name||'(new chute)');
+    return '<div class="caprow"><div style="font-family:var(--cond);font-size:14px;font-weight:600;color:#eef4fb;margin-bottom:5px">'+tag+'</div>'
+      +'<div class="meta"><b>'+c.lat.toFixed(6)+', '+c.lon.toFixed(6)+'</b> · ±'+Math.round(c.accuracy)+'m<br>'+alt+' · '+asp+'</div>'
+      +'<div class="acts"><button class="sight" data-sight="'+i+'">🧭 Sight fall line</button><button data-del="'+i+'">Delete</button></div></div>';
+  }).join('') || '<div class="caphint">No points captured yet.</div>';
+  host.querySelectorAll('[data-sight]').forEach(el=>el.addEventListener('click',()=>{
+    const i=+el.dataset.sight;
+    if(!compassOn){ banner('exit','Tap “Enable compass” first'); return; }
+    if(lastHeading==null){ banner('exit','No compass reading yet — hold the phone flat'); return; }
+    captures[i].aspect=Math.round(lastHeading); renderCaps(); banner('enter','Fall line '+cpt(captures[i].aspect)+' '+captures[i].aspect+'°');
+  }));
+  host.querySelectorAll('[data-del]').forEach(el=>el.addEventListener('click',()=>{ captures.splice(+el.dataset.del,1); renderCaps(); }));
+}
+document.getElementById('capCompass').addEventListener('click',enableCompass);
+document.getElementById('capTop').addEventListener('click',()=>{
+  if(!lastFix || !lastFix.lat){ banner('exit','No GPS fix yet'); return; }
+  const sel=document.getElementById('capChute'); const opt=sel.options[sel.selectedIndex]; const cid=sel.value;
+  if(!cid){ banner('exit','Pick which chute you’re at first'); return; }
+  const isNew = cid==='__new__';
+  captures.push({ id:isNew?null:cid, run:isNew?'':(opt.dataset.run||''), name:isNew?'(new chute)':(opt.dataset.name||''),
+                  lat:lastFix.lat, lon:lastFix.lon, accuracy:lastFix.accuracy||0, alt:lastFix.alt, altAcc:lastFix.altAcc,
+                  aspect:(compassOn&&lastHeading!=null)?Math.round(lastHeading):null, ts:clock() });
+  renderCaps(); banner('enter','Captured '+(isNew?'(new)':('Run '+(opt.dataset.run||'?')))+' ±'+Math.round(lastFix.accuracy||0)+'m');
+});
+document.getElementById('copyCaps').addEventListener('click',()=>{
+  if(!captures.length){ banner('exit','Nothing captured yet'); return; }
+  const out=captures.map(c=>({ id:c.id, run:c.run, name:c.name, topLatLon:[+c.lat.toFixed(6),+c.lon.toFixed(6)],
+    aspectDeg:c.aspect, topElev_m:(c.alt!=null?Math.round(c.alt):null), accuracy_m:Math.round(c.accuracy||0) }));
+  const txt=JSON.stringify(out,null,2);
+  if(navigator.clipboard) navigator.clipboard.writeText(txt).then(()=>banner('enter','Captures copied ('+out.length+')'));
+});
+renderCaps();
+
 /* ----- load chutes ----- */
 (async function(){
   try{
@@ -385,6 +464,7 @@ document.getElementById('startBtn').addEventListener('click',start);
     const pois=(d.pois||[]).filter(p=>Array.isArray(p.topLatLon)&&typeof p.radiusMeters==='number');
     Geofencer.zones = pois.length ? pois.map(p=>({ id:p.id,name:p.name||'Chute',runNumber:p.runNumber||'?',difficulty:p.difficulty||'black',noFallZone:!!p.noFallZone,topLatLon:p.topLatLon,radiusMeters:p.radiusMeters })) : SAMPLE.map(c=>({...c}));
   }catch(e){ Geofencer.zones=SAMPLE.map(c=>({...c})); }
+  fillCaptureChutes();
   // central switch: admin "Full GPS mode" disables the power saver for everyone
   try{
     const cfgUrl=(location.protocol==='https:'||location.protocol==='http:')?'/api/config':'https://chase-life.pages.dev/api/config';
