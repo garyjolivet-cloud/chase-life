@@ -1121,15 +1121,20 @@ input, textarea, select { font-family: inherit; }
         </div>
         <div class="field-row">
           <div class="field">
-            <label for="f-bottomLat">Bottom latitude <span class="req">*</span></label>
+            <label for="f-bottomLat">Bottom latitude <span style="color:#6b7a90;font-weight:400;font-size:.82em">(optional)</span></label>
             <input type="number" id="f-bottomLat" step="0.0001" placeholder="51.2761">
-            <div class="hint">Used to compute the chute's axis bearing.</div>
+            <div class="hint">Optional. If set, the fall line is computed top→bottom.</div>
           </div>
           <div class="field">
-            <label for="f-bottomLon">Bottom longitude <span class="req">*</span></label>
+            <label for="f-bottomLon">Bottom longitude <span style="color:#6b7a90;font-weight:400;font-size:.82em">(optional)</span></label>
             <input type="number" id="f-bottomLon" step="0.0001" placeholder="-117.0802">
             <div class="hint" id="hint-bearing">&nbsp;</div>
           </div>
+        </div>
+        <div class="field">
+          <label for="f-aspect">Fall-line bearing / aspect (°)</label>
+          <input type="number" id="f-aspect" step="1" min="0" max="359" placeholder="e.g. 92">
+          <div class="hint" id="hint-aspect">Compass direction the chute descends (0–359°; 0=N, 90=E, 180=S, 270=W). Preferred fall-line source — works even when you can't reach the bottom. <strong>Required if no bottom point is set.</strong></div>
         </div>
         <div class="field-row">
           <div class="field">
@@ -1800,7 +1805,7 @@ function blankFormState() {
     topLat: '', topLon: '', radiusMeters: '',
     // winter-chute
     runNumber: '',
-    bottomLat: '', bottomLon: '',
+    bottomLat: '', bottomLon: '', aspect: '',
     slopeMin_deg: '', slopeMax_deg: '',
     widthMin_m: '', widthMax_m: '',
     topElev_m: '', bottomElev_m: '',
@@ -1914,6 +1919,7 @@ function openEditForm(poiId) {
       state.form.bottomLat = poi.bottomLatLon[0];
       state.form.bottomLon = poi.bottomLatLon[1];
     }
+    state.form.aspect = (typeof poi.aspectDeg === 'number') ? poi.aspectDeg : '';
     state.form.slopeMin_deg = poi.slopeMin_deg ?? '';
     state.form.slopeMax_deg = poi.slopeMax_deg ?? '';
     state.form.widthMin_m = poi.widthMin_m ?? '';
@@ -1954,6 +1960,7 @@ function openEditForm(poiId) {
   if (poi.type === 'winter-chute') {
     document.getElementById('f-bottomLat').value = state.form.bottomLat;
     document.getElementById('f-bottomLon').value = state.form.bottomLon;
+    document.getElementById('f-aspect').value = state.form.aspect;
     document.getElementById('f-slopeMin').value = state.form.slopeMin_deg;
     document.getElementById('f-slopeMax').value = state.form.slopeMax_deg;
     document.getElementById('f-widthMin').value = state.form.widthMin_m;
@@ -2209,6 +2216,12 @@ wireNumberField('f-topLon', 'topLon');
 wireNumberField('f-radius', 'radiusMeters');
 wireNumberField('f-bottomLat', 'bottomLat');
 wireNumberField('f-bottomLon', 'bottomLon');
+wireNumberField('f-aspect', 'aspect');
+(function(){
+  const COMPASS=['N','NNE','NE','ENE','E','ESE','SE','SSE','S','SSW','SW','WSW','W','WNW','NW','NNW'];
+  const el=document.getElementById('f-aspect'), hint=document.getElementById('hint-aspect');
+  if(el&&hint){ const base=hint.innerHTML; el.addEventListener('input',()=>{ const v=parseFloat(el.value); if(isFinite(v)&&v>=0&&v<360){ hint.innerHTML='Descends <strong>'+COMPASS[Math.round(v/22.5)%16]+'</strong> ('+Math.round(v)+'°). '+base; } else { hint.innerHTML=base; } }); }
+})();
 wireNumberField('f-slopeMin', 'slopeMin_deg');
 wireNumberField('f-slopeMax', 'slopeMax_deg');
 wireNumberField('f-widthMin', 'widthMin_m');
@@ -2275,6 +2288,7 @@ function buildPOIFromForm() {
     if (typeof f.bottomLat === 'number' && typeof f.bottomLon === 'number') {
       poi.bottomLatLon = [f.bottomLat, f.bottomLon];
     }
+    if (typeof f.aspect === 'number') poi.aspectDeg = f.aspect;
     if (typeof f.slopeMin_deg === 'number') poi.slopeMin_deg = f.slopeMin_deg;
     if (typeof f.slopeMax_deg === 'number') poi.slopeMax_deg = f.slopeMax_deg;
     if (typeof f.widthMin_m === 'number')   poi.widthMin_m = f.widthMin_m;
@@ -2339,15 +2353,21 @@ function validatePOIClient(poi) {
   }
 
   if (poi.type === 'winter-chute') {
-    if (!Array.isArray(poi.bottomLatLon) || poi.bottomLatLon.length !== 2 ||
-        typeof poi.bottomLatLon[0] !== 'number' || typeof poi.bottomLatLon[1] !== 'number') {
-      errors.push('Bottom latitude and longitude are required for winter-chute.');
-    } else {
+    const hasBottom = Array.isArray(poi.bottomLatLon) && poi.bottomLatLon.length === 2 &&
+        typeof poi.bottomLatLon[0] === 'number' && typeof poi.bottomLatLon[1] === 'number';
+    if (hasBottom) {
       const [lat, lon] = poi.bottomLatLon;
       if (lat < KH_BBOX.latMin || lat > KH_BBOX.latMax ||
           lon < KH_BBOX.lonMin || lon > KH_BBOX.lonMax) {
         errors.push('Bottom coordinates are outside the KH bounding box.');
       }
+    }
+    const hasAspect = typeof poi.aspectDeg === 'number' && poi.aspectDeg >= 0 && poi.aspectDeg < 360;
+    if (poi.aspectDeg !== undefined && !hasAspect) {
+      errors.push('Fall-line bearing (aspect) must be 0–359°.');
+    }
+    if (!hasBottom && !hasAspect) {
+      errors.push('Set a fall-line bearing (aspect) or a bottom coordinate.');
     }
     if (typeof poi.slopeMin_deg !== 'number' || typeof poi.slopeMax_deg !== 'number') {
       errors.push('Slope min and max are required.');
@@ -2399,10 +2419,18 @@ function formFieldErrors() {
   if (typeof f.radiusMeters !== 'number') bad['f-radius'] = 'Required';
   else if (f.radiusMeters < RADIUS_MIN || f.radiusMeters > RADIUS_MAX) bad['f-radius'] = `${RADIUS_MIN}–${RADIUS_MAX} m`;
   if (f.type === 'winter-chute') {
-    if (typeof f.bottomLat !== 'number') bad['f-bottomLat'] = 'Required';
-    else if (f.bottomLat < KH_BBOX.latMin || f.bottomLat > KH_BBOX.latMax) bad['f-bottomLat'] = 'Out of range';
-    if (typeof f.bottomLon !== 'number') bad['f-bottomLon'] = 'Required';
-    else if (f.bottomLon < KH_BBOX.lonMin || f.bottomLon > KH_BBOX.lonMax) bad['f-bottomLon'] = 'Out of range';
+    const latSet = typeof f.bottomLat === 'number', lonSet = typeof f.bottomLon === 'number';
+    if (latSet !== lonSet) {
+      if (!latSet) bad['f-bottomLat'] = 'Both or neither';
+      if (!lonSet) bad['f-bottomLon'] = 'Both or neither';
+    } else if (latSet && lonSet) {
+      if (f.bottomLat < KH_BBOX.latMin || f.bottomLat > KH_BBOX.latMax) bad['f-bottomLat'] = 'Out of range';
+      if (f.bottomLon < KH_BBOX.lonMin || f.bottomLon > KH_BBOX.lonMax) bad['f-bottomLon'] = 'Out of range';
+    }
+    const fHasBottom = latSet && lonSet;
+    const fHasAspect = typeof f.aspect === 'number' && f.aspect >= 0 && f.aspect < 360;
+    if (typeof f.aspect === 'number' && (f.aspect < 0 || f.aspect >= 360)) bad['f-aspect'] = '0–359';
+    if (!fHasBottom && !fHasAspect) bad['f-aspect'] = 'Set aspect or bottom point';
     if (typeof f.slopeMin_deg !== 'number') bad['f-slopeMin'] = 'Required';
     if (typeof f.slopeMax_deg !== 'number') bad['f-slopeMax'] = 'Required';
     if (!bad['f-slopeMin'] && !bad['f-slopeMax'] && f.slopeMin_deg > f.slopeMax_deg) bad['f-slopeMax'] = 'Max must be ≥ min';
