@@ -1801,7 +1801,7 @@ $refreshBtn.addEventListener('click', () => { loadPOIs(); toast('Refreshing POI 
 function blankFormState() {
   return {
     type: null,
-    id: '', name: '', region: '', geoDescription: 'Kicking Horse', notes: '',
+    id: '', name: '', region: 'Kicking Horse', geoDescription: '', notes: '',
     topLat: '', topLon: '', radiusMeters: '',
     // winter-chute
     runNumber: '',
@@ -1877,6 +1877,11 @@ function openAddForm() {
   state.editingId = null;
 
   resetFormUI();
+
+  // resetFormUI() clears the inputs — write the blank-form defaults back in so they actually show.
+  document.getElementById('f-region').value = state.form.region;
+  document.getElementById('f-slopeMin').value = state.form.slopeMin_deg;
+  document.getElementById('f-slopeMax').value = state.form.slopeMax_deg;
 
   // Heading
   document.getElementById('form-heading').textContent = 'New POI';
