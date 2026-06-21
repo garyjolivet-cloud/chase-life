@@ -1183,6 +1183,16 @@ input, textarea, select { font-family: inherit; }
           <div class="diff-dbl-note" id="diff-dbl-note">⚠ Skiers entering this chute will hear and see an unmarked-hazards disclaimer.</div>
         </div>
         <div class="field">
+          <label>Low-visibility rating</label>
+          <select id="f-lowVis">
+            <option value="">— not set —</option>
+            <option value="good">Good in low vis</option>
+            <option value="fair">Fair in low vis</option>
+            <option value="poor">Poor in low vis</option>
+          </select>
+          <div class="hint">Optional. How this chute skis in flat light or fog — treed, narrow lines stay good; open faces go poor. Leave blank if unsure.</div>
+        </div>
+        <div class="field">
           <label>Storm direction preference <span class="req">*</span></label>
           <div class="compass-picker" id="compass-picker">
             <!-- compass buttons injected by JS -->
@@ -1811,6 +1821,7 @@ function blankFormState() {
     topElev_m: '', bottomElev_m: '',
     stormDirPreference: '',
     difficulty: '',
+    lowVisRating: '',
     vegetation: '',
     cornice: false, skiedThisSeason: false,
     bookmarked: false, experimental: false, closesEarly: false, noFallZone: false,
@@ -1885,6 +1896,7 @@ function openAddForm() {
   document.getElementById('f-slopeMax').value = state.form.slopeMax_deg;
   document.getElementById('f-widthMin').value = state.form.widthMin_m;
   document.getElementById('f-widthMax').value = state.form.widthMax_m;
+  const lvNew = document.getElementById('f-lowVis'); if (lvNew) lvNew.value = '';
 
   // Heading
   document.getElementById('form-heading').textContent = 'New POI';
@@ -2002,6 +2014,7 @@ function openEditForm(poiId) {
     if (toggle) toggle.classList.toggle('on', !!state.form[f.key]);
   });
   document.querySelectorAll('.diff-btn').forEach(b => b.classList.toggle('selected', b.dataset.diff === state.form.difficulty));
+  const lvEdit = document.getElementById('f-lowVis'); if (lvEdit) lvEdit.value = poi.lowVisRating || '';
   updateDiffNote();
   // Narrative autoplay toggle (separate)
   const autoplayToggle = document.getElementById('f-autoplay');
@@ -2351,6 +2364,8 @@ function buildPOIFromForm() {
     poi.closesEarly = !!f.closesEarly;
     poi.noFallZone = !!f.noFallZone;
     if (f.difficulty) poi.difficulty = f.difficulty;
+    const lvSave = (document.getElementById('f-lowVis') || {}).value || '';
+    if (lvSave) poi.lowVisRating = lvSave;
   } else if (f.type === 'narrative-poi') {
     if (f.narrativeText) poi.narrativeText = f.narrativeText.trim();
     poi.season = f.season || 'any';
@@ -3280,6 +3295,7 @@ function mapOpenPanel(poiId) {
   if (poi.type === 'winter-chute') {
     if (poi.runNumber) rows.push(row('Run #', poi.runNumber));
     if (poi.difficulty) rows.push(row('Difficulty', DIFF_LABEL[poi.difficulty] || poi.difficulty));
+    if (poi.lowVisRating) rows.push(row('Low visibility', ({good:'Good in low vis',fair:'Fair in low vis',poor:'Poor in low vis'})[poi.lowVisRating] || poi.lowVisRating));
     if (poi.noFallZone) rows.push(row('Hazard', 'No-fall zone'));
     if (poi.slopeMin_deg != null) rows.push(row('Slope', poi.slopeMin_deg + '–' + poi.slopeMax_deg + '°'));
     if (poi.topElev_m != null) rows.push(row('Elevation', poi.topElev_m + ' → ' + poi.bottomElev_m + ' m'));
