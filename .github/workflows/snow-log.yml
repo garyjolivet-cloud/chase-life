@@ -1,0 +1,22 @@
+name: Daily snow log
+
+# Records each day's new snow into the rolling history that feeds the 14-day
+# bar chart on the winter home. Runs once daily; can also be run by hand.
+
+on:
+  schedule:
+    # 16:15 UTC ≈ 09:15 Mountain Standard Time (ski season). GitHub cron is UTC and
+    # does not follow DST, so in summer this fires ~10:15 local — fine, snow only
+    # matters in winter. Adjust if you want a different time.
+    - cron: '15 16 * * *'
+  workflow_dispatch: {}   # lets you run it manually from the Actions tab to test
+
+jobs:
+  capture:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Capture today's snowfall
+        run: |
+          curl -sS -X POST "https://chase-life.pages.dev/api/snow-log" \
+            -H "Authorization: Bearer ${{ secrets.ADMIN_TOKEN }}" \
+            --fail-with-body
