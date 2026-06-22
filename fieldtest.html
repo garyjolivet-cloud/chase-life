@@ -125,7 +125,7 @@
     <span class="tg" id="tgElev">Elev gate</span>
   </div>
 
-  <div class="sectit"><span>Capture points (for the walk)</span><button class="copy" id="copyCaps">Copy JSON</button></div>
+  <div class="sectit"><span>Capture points (for the walk)</span><span style="display:flex;gap:6px"><button class="copy" id="clearCaps" style="opacity:.75">Clear</button><button class="copy" id="copyCaps">Copy JSON</button></span></div>
   <div class="row" style="margin-bottom:8px"><select id="capChute" style="flex:1;background:#141d2b;color:#eef4fb;border:1px solid var(--rim);border-radius:9px;padding:11px;font-family:var(--cond);font-size:14px"></select></div>
   <div class="row" style="gap:8px"><button class="capbtn" id="capTop">📍 Capture this spot</button><button class="capbtn alt" id="capCompass">🧭 Enable compass</button></div>
   <div class="caphint" id="capHint">Stand at a chute top and tap <b>Capture this spot</b> (logs lat/lon, altitude, accuracy). Then point the phone straight down the fall line and tap <b>Sight</b> on that row to record the descent bearing.</div>
@@ -398,6 +398,9 @@ document.getElementById('startBtn').addEventListener('click',start);
 
 /* ----- capture points: top coords + altitude + fall-line sighting (for the walk) ----- */
 let captures=[], compassOn=false, lastHeading=null;
+// Auto-save captures to the device so a screen-lock, tab purge, or reload can't wipe the day's work.
+function saveCaps(){ try{ localStorage.setItem('cl_captures', JSON.stringify(captures)); }catch(e){} }
+try{ const _r=localStorage.getItem('cl_captures'); if(_r){ const _a=JSON.parse(_r); if(Array.isArray(_a)) captures=_a; } }catch(e){}
 const COMPASS16=['N','NNE','NE','ENE','E','ESE','SE','SSE','S','SSW','SW','WSW','W','WNW','NW','NNW'];
 function cpt(d){ return COMPASS16[Math.round(d/22.5)%16]; }
 function onOrient(e){
@@ -443,9 +446,9 @@ function renderCaps(){
     const i=+el.dataset.sight;
     if(!compassOn){ banner('exit','Tap “Enable compass” first'); return; }
     if(lastHeading==null){ banner('exit','No compass reading yet — hold the phone flat'); return; }
-    captures[i].aspect=Math.round(lastHeading); renderCaps(); banner('enter','Fall line '+cpt(captures[i].aspect)+' '+captures[i].aspect+'°');
+    captures[i].aspect=Math.round(lastHeading); saveCaps(); renderCaps(); banner('enter','Fall line '+cpt(captures[i].aspect)+' '+captures[i].aspect+'°');
   }));
-  host.querySelectorAll('[data-del]').forEach(el=>el.addEventListener('click',()=>{ captures.splice(+el.dataset.del,1); renderCaps(); }));
+  host.querySelectorAll('[data-del]').forEach(el=>el.addEventListener('click',()=>{ captures.splice(+el.dataset.del,1); saveCaps(); renderCaps(); }));
 }
 document.getElementById('capCompass').addEventListener('click',enableCompass);
 document.getElementById('capTop').addEventListener('click',()=>{
@@ -456,7 +459,9 @@ document.getElementById('capTop').addEventListener('click',()=>{
   captures.push({ id:isNew?null:cid, run:isNew?'':(opt.dataset.run||''), name:isNew?'(new chute)':(opt.dataset.name||''),
                   lat:lastFix.lat, lon:lastFix.lon, accuracy:lastFix.accuracy||0, alt:lastFix.alt, altAcc:lastFix.altAcc,
                   aspect:(compassOn&&lastHeading!=null)?Math.round(lastHeading):null, ts:clock() });
-  renderCaps(); banner('enter','Captured '+(isNew?'(new)':('Run '+(opt.dataset.run||'?')))+' ±'+Math.round(lastFix.accuracy||0)+'m');
+  renderCaps(); saveCaps();
+  const _acc=Math.round(lastFix.accuracy||0);
+  banner(_acc>25?'exit':'enter', (_acc>25?'⚠ weak GPS — ':'')+'Captured '+(isNew?'(new)':('Run '+(opt.dataset.run||'?')))+' ±'+_acc+'m'+(_acc>25?' · consider re-capturing':''));
 });
 document.getElementById('copyCaps').addEventListener('click',()=>{
   if(!captures.length){ banner('exit','Nothing captured yet'); return; }
@@ -467,6 +472,12 @@ document.getElementById('copyCaps').addEventListener('click',()=>{
   if(navigator.clipboard && window.isSecureContext){
     navigator.clipboard.writeText(txt).then(()=>banner('enter','Captures copied ('+out.length+')')).catch(showOut);
   } else { showOut(); }
+});
+document.getElementById('clearCaps').addEventListener('click',()=>{
+  if(!captures.length){ banner('exit','Nothing to clear'); return; }
+  if(confirm('Clear all '+captures.length+' captured point(s)? Copy the JSON first if you need it.')){
+    captures=[]; saveCaps(); renderCaps(); banner('enter','Cleared');
+  }
 });
 renderCaps();
 
